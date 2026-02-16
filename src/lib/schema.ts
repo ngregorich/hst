@@ -64,4 +64,4 @@ export const MODELS = [
 	'x-ai/grok-4.1-fast'
 ] as const;
 
-export const DEFAULT_MODEL = 'openai/gpt-4o-mini';
+export const DEFAULT_MODEL = 'anthropic/claude-haiku-4.5';

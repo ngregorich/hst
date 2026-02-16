@@ -1,5 +1,5 @@
 import { get, set, del, keys } from 'idb-keyval';
-import type { AnalysisExport, Comment, HNPost } from './schema';
+import { DEFAULT_MODEL, type AnalysisExport, type Comment, type HNPost } from './schema';
 import { DEFAULT_ANALYSIS_PROMPT_TEMPLATE, DEFAULT_QUESTION_PROMPT_TEMPLATE, DEFAULT_THREAD_SUMMARY_PROMPT_TEMPLATE } from './prompts';
 
 const STORAGE_KEY_PREFIX = 'hn-analysis-';
@@ -55,7 +55,7 @@ export interface Preferences {
 const defaultPrefs: Preferences = {
 	theme: 'system',
 	apiKey: '',
-	model: 'openai/gpt-4o-mini',
+	model: DEFAULT_MODEL,
 	sortMode: 'default',
 	showSummary: true,
 	showKeywords: true,

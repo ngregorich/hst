@@ -27,13 +27,13 @@ To auto-load an exported analysis at startup, place it at `static/examples/start
 
 Supports any OpenRouter model. Preset options:
 
-- `anthropic/claude-haiku-4.5` - Fast, affordable
-- `anthropic/claude-sonnet-4.5` - Balanced
-- `deepseek/deepseek-v3.2` - Budget option
-- `google/gemini-3-flash-preview` - Very cheap
-- `openai/gpt-5-mini` - Default
-- `openai/gpt-5.2` - High quality
-- `x-ai/grok-4.1-fast` - Fast alternative
+- `anthropic/claude-haiku-4.5` (default)
+- `anthropic/claude-sonnet-4.5`
+- `deepseek/deepseek-v3.2`
+- `google/gemini-3-flash-preview`
+- `openai/gpt-5-mini`
+- `openai/gpt-5.2`
+- `x-ai/grok-4.1-fast`
 
 ## Development
 
