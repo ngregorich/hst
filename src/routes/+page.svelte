@@ -501,7 +501,7 @@
 
 			{#if activeTab === 'analysis'}
 				<div class="h-[70vh] min-h-[420px] max-h-[900px] overflow-hidden">
-					<SplitPane initialWidth={200} minWidth={80} maxWidth={400}>
+					<SplitPane initialWidth={280} minWidth={140} maxWidth={420}>
 						{#snippet left()}
 							<div class="h-full border border-gray-200 dark:border-gray-700 rounded p-3 mr-1 overflow-auto">
 								<h3 class="text-sm font-medium mb-2">Comment Tree</h3>
