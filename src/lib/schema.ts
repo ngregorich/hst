@@ -40,6 +40,7 @@ export interface AnalysisExport {
 	sentimentQuestion: string;
 	model: string;
 	analyzedAt: string;
+	threadSummary?: string;
 	post: HNPost;
 	comments: Comment[];
 }

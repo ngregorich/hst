@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { MODELS } from '$lib/schema';
-	import { DEFAULT_ANALYSIS_PROMPT_TEMPLATE, DEFAULT_QUESTION_PROMPT_TEMPLATE } from '$lib/prompts';
+import { DEFAULT_ANALYSIS_PROMPT_TEMPLATE, DEFAULT_QUESTION_PROMPT_TEMPLATE, DEFAULT_THREAD_SUMMARY_PROMPT_TEMPLATE } from '$lib/prompts';
 
 	interface Props {
 		postInput: string;
@@ -8,6 +8,7 @@
 		model: string;
 		questionPromptTemplate: string;
 		analysisPromptTemplate: string;
+		threadSummaryPromptTemplate: string;
 		onLoad: () => void;
 		loading?: boolean;
 	}
@@ -18,6 +19,7 @@
 		model = $bindable(),
 		questionPromptTemplate = $bindable(),
 		analysisPromptTemplate = $bindable(),
+		threadSummaryPromptTemplate = $bindable(),
 		onLoad,
 		loading = false
 	}: Props = $props();
@@ -47,17 +49,31 @@
 	function resetPromptTemplates() {
 		questionPromptTemplate = DEFAULT_QUESTION_PROMPT_TEMPLATE;
 		analysisPromptTemplate = DEFAULT_ANALYSIS_PROMPT_TEMPLATE;
+		threadSummaryPromptTemplate = DEFAULT_THREAD_SUMMARY_PROMPT_TEMPLATE;
+	}
+
+	function handlePostInputKeydown(e: KeyboardEvent) {
+		if (e.key !== 'Enter') return;
+		e.preventDefault();
+		if (loading || !postInput.trim()) return;
+		onLoad();
 	}
 </script>
 
-<div class="space-y-4 w-full">
+<div class="space-y-4 w-full border border-gray-200 dark:border-gray-700 rounded-lg p-4">
 	<div>
 		<label for="post-input" class="block text-sm font-medium mb-1">HN Post URL or ID</label>
 		<div class="flex gap-2">
 			<input
 				id="post-input"
+				name="hn-post-url"
 				type="text"
 				bind:value={postInput}
+				onkeydown={handlePostInputKeydown}
+				autocomplete="url"
+				autocapitalize="off"
+				autocorrect="off"
+				spellcheck="false"
 				placeholder="https://news.ycombinator.com/item?id=12345 or just 12345"
 				class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-500"
 			/>
@@ -86,8 +102,13 @@
 		</label>
 		<input
 			id="api-key"
+			name="openrouter-api-key"
 			type="password"
 			bind:value={apiKey}
+			autocomplete="new-password"
+			autocapitalize="off"
+			autocorrect="off"
+			spellcheck="false"
 			placeholder="sk-or-..."
 			class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-500"
 		/>
@@ -155,6 +176,21 @@
 				></textarea>
 				<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
 					Placeholders: <code>&#123;&#123;sentiment_question&#125;&#125;</code>, <code>&#123;&#123;comment_text&#125;&#125;</code>
+				</p>
+			</div>
+
+			<div>
+				<label for="thread-summary-prompt-template" class="block text-sm font-medium mb-1">
+					Overall Thread Summary Prompt Template
+				</label>
+				<textarea
+					id="thread-summary-prompt-template"
+					bind:value={threadSummaryPromptTemplate}
+					rows="10"
+					class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono text-xs"
+				></textarea>
+				<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+					Placeholders: <code>&#123;&#123;sentiment_question&#125;&#125;</code>, <code>&#123;&#123;analyzed_count&#125;&#125;</code>, <code>&#123;&#123;analyzable_count&#125;&#125;</code>, <code>&#123;&#123;nps_score&#125;&#125;</code>, <code>&#123;&#123;promoters&#125;&#125;</code>, <code>&#123;&#123;neutrals&#125;&#125;</code>, <code>&#123;&#123;detractors&#125;&#125;</code>, <code>&#123;&#123;top_keywords&#125;&#125;</code>
 				</p>
 			</div>
 

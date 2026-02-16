@@ -1,7 +1,18 @@
 import type { Comment, CommentAnalysis, Sentiment, HNPost } from './schema';
-import { DEFAULT_ANALYSIS_PROMPT_TEMPLATE, DEFAULT_QUESTION_PROMPT_TEMPLATE, renderPromptTemplate } from './prompts';
+import { DEFAULT_ANALYSIS_PROMPT_TEMPLATE, DEFAULT_QUESTION_PROMPT_TEMPLATE, DEFAULT_THREAD_SUMMARY_PROMPT_TEMPLATE, renderPromptTemplate } from './prompts';
 
 const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
+export interface ThreadSummaryInput {
+	sentimentQuestion: string;
+	analyzableCount: number;
+	analyzedCount: number;
+	npsScore: number;
+	promoters: number;
+	neutrals: number;
+	detractors: number;
+	topKeywords: Array<{ keyword: string; count: number }>;
+}
 
 export async function generateSentimentQuestion(
 	apiKey: string,
@@ -160,6 +171,58 @@ export async function analyzeComment(
 	return parseResponse(content);
 }
 
+export async function generateThreadSummary(
+	apiKey: string,
+	model: string,
+	input: ThreadSummaryInput,
+	signal?: AbortSignal,
+	threadSummaryPromptTemplate?: string
+): Promise<string> {
+	const keywordList = input.topKeywords.map((k) => `${k.keyword} (${k.count})`).join(', ') || 'none';
+	const prompt = renderPromptTemplate(
+		threadSummaryPromptTemplate?.trim() || DEFAULT_THREAD_SUMMARY_PROMPT_TEMPLATE,
+		{
+			sentiment_question: input.sentimentQuestion,
+			analyzed_count: String(input.analyzedCount),
+			analyzable_count: String(input.analyzableCount),
+			nps_score: String(input.npsScore),
+			promoters: String(input.promoters),
+			neutrals: String(input.neutrals),
+			detractors: String(input.detractors),
+			top_keywords: keywordList
+		}
+	);
+
+	const res = await fetch(API_URL, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${apiKey}`,
+			'HTTP-Referer': globalThis.location?.origin || 'https://hst.experimentarea.com',
+			'X-Title': 'HN Sentiment Tool (HST)'
+		},
+		body: JSON.stringify({
+			model,
+			messages: [{ role: 'user', content: prompt }],
+			temperature: 0.2,
+			max_tokens: 220,
+			reasoning: { effort: 'low' }
+		}),
+		signal
+	});
+
+	if (!res.ok) {
+		const err = await res.text();
+		throw new Error(`API error: ${res.status} ${err}`);
+	}
+
+	const data = await res.json();
+	const content = data.choices?.[0]?.message?.content;
+	if (!content) throw new Error('No summary content returned');
+
+	return content.trim();
+}
+
 const MAX_PARALLEL = 8;
 
 export async function analyzeCommentsBatch(
@@ -195,12 +258,19 @@ export async function analyzeCommentsBatch(
 		}
 	}
 
-	// Process top-level comments in parallel, max 8 at a time
-	for (let i = 0; i < comments.length; i += MAX_PARALLEL) {
-		if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-		const batch = comments.slice(i, i + MAX_PARALLEL);
-		await Promise.all(batch.map(processThread));
+	// Process top-level comments with a dynamic worker pool so slots stay busy.
+	let nextIndex = 0;
+	async function worker(): Promise<void> {
+		while (true) {
+			if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+			const index = nextIndex++;
+			if (index >= comments.length) return;
+			await processThread(comments[index]);
+		}
 	}
+
+	const workerCount = Math.min(MAX_PARALLEL, comments.length);
+	await Promise.all(Array.from({ length: workerCount }, () => worker()));
 }
 
 function countComments(comments: Comment[]): number {

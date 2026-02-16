@@ -1,6 +1,6 @@
 import { get, set, del, keys } from 'idb-keyval';
 import type { AnalysisExport, Comment, HNPost } from './schema';
-import { DEFAULT_ANALYSIS_PROMPT_TEMPLATE, DEFAULT_QUESTION_PROMPT_TEMPLATE } from './prompts';
+import { DEFAULT_ANALYSIS_PROMPT_TEMPLATE, DEFAULT_QUESTION_PROMPT_TEMPLATE, DEFAULT_THREAD_SUMMARY_PROMPT_TEMPLATE } from './prompts';
 
 const STORAGE_KEY_PREFIX = 'hn-analysis-';
 const CACHE_KEY_PREFIX = 'hn-cache-';
@@ -48,6 +48,7 @@ export interface Preferences {
 	showTime: boolean;
 	questionPromptTemplate: string;
 	analysisPromptTemplate: string;
+	threadSummaryPromptTemplate: string;
 }
 
 const defaultPrefs: Preferences = {
@@ -62,7 +63,8 @@ const defaultPrefs: Preferences = {
 	showAuthor: true,
 	showTime: true,
 	questionPromptTemplate: DEFAULT_QUESTION_PROMPT_TEMPLATE,
-	analysisPromptTemplate: DEFAULT_ANALYSIS_PROMPT_TEMPLATE
+	analysisPromptTemplate: DEFAULT_ANALYSIS_PROMPT_TEMPLATE,
+	threadSummaryPromptTemplate: DEFAULT_THREAD_SUMMARY_PROMPT_TEMPLATE
 };
 
 // Preferences use localStorage (small, sync access needed)
@@ -141,6 +143,27 @@ export async function listSavedAnalyses(): Promise<number[]> {
 			.filter((k): k is string => typeof k === 'string' && k.startsWith(STORAGE_KEY_PREFIX))
 			.map((k) => parseInt(k.slice(STORAGE_KEY_PREFIX.length), 10))
 			.filter((n) => !isNaN(n));
+	} catch {
+		return [];
+	}
+}
+
+export async function listAnalysisModels(postId: number): Promise<string[]> {
+	try {
+		const allKeys = await keys();
+		const prefix = `${STORAGE_KEY_PREFIX}${postId}-`;
+		const matching = allKeys.filter(
+			(k): k is string => typeof k === 'string' && k.startsWith(prefix)
+		);
+		if (matching.length === 0) return [];
+
+		const models = new Set<string>();
+		for (const key of matching) {
+			const data = await get(key);
+			const model = data?.model;
+			if (typeof model === 'string' && model.trim()) models.add(model);
+		}
+		return [...models].sort((a, b) => a.localeCompare(b));
 	} catch {
 		return [];
 	}

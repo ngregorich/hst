@@ -32,6 +32,23 @@ Guidelines:
 - summary: Brief factual summary of the main point
 - keywords: 0-5 unique key phrases that provide insight into the commenter's perspective. Only include meaningful phrases, not generic words.`;
 
+export const DEFAULT_THREAD_SUMMARY_PROMPT_TEMPLATE = `Write a concise top-level summary of Hacker News thread sentiment.
+
+Sentiment question:
+{{sentiment_question}}
+
+Analysis stats:
+- analyzed: {{analyzed_count}} of {{analyzable_count}} analyzable comments
+- nps-style score: {{nps_score}} (promoters {{promoters}}, neutral {{neutrals}}, detractors {{detractors}})
+- top keyword phrases: {{top_keywords}}
+
+Requirements:
+- 2-4 sentences
+- capture overall stance and uncertainty/divergence
+- mention 2-4 major themes from keywords
+- do not invent details not supported by the data
+- plain text only`;
+
 export function renderPromptTemplate(template: string, values: Record<string, string>): string {
 	return template.replace(/\{\{([a-z0-9_]+)\}\}/gi, (_, key: string) => values[key] ?? '');
 }

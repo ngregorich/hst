@@ -6,16 +6,33 @@
 		post: HNPost;
 		comments: Comment[];
 		analysisModel: string | null;
+		analyzing?: boolean;
+		threadSummary?: string;
+		generatingThreadSummary?: boolean;
+		sentimentQuestion?: string;
 	}
 
-	let { post, comments, analysisModel }: Props = $props();
+	let {
+		post,
+		comments,
+		analysisModel,
+		analyzing = false,
+		threadSummary = '',
+		generatingThreadSummary = false,
+		sentimentQuestion = ''
+	}: Props = $props();
 
 	let stats = $derived.by(() => {
 		const flat = flattenComments(comments);
-		const analyzed = flat.filter((c) => c.analysis);
+		const analyzable = flat.filter((c) => c.text && !c.deleted && !c.dead);
+		const analyzed = analyzable.filter((c) => c.analysis);
 		const promoters = analyzed.filter((c) => c.analysis?.sentiment === 'promoter').length;
 		const neutrals = analyzed.filter((c) => c.analysis?.sentiment === 'neutral').length;
 		const detractors = analyzed.filter((c) => c.analysis?.sentiment === 'detractor').length;
+		const skippedDeleted = flat.filter((c) => c.deleted).length;
+		const skippedDead = flat.filter((c) => c.dead).length;
+		const skippedEmpty = flat.filter((c) => !c.text && !c.deleted && !c.dead).length;
+		const skippedTotal = skippedDeleted + skippedDead + skippedEmpty;
 
 		// Count keywords
 		const keywordCounts = new Map<string, number>();
@@ -29,7 +46,19 @@
 			.sort((a, b) => b[1] - a[1])
 			.slice(0, 10);
 
-		return { total: flat.length, analyzed: analyzed.length, promoters, neutrals, detractors, topKeywords };
+		return {
+			total: flat.length,
+			analyzable: analyzable.length,
+			analyzed: analyzed.length,
+			promoters,
+			neutrals,
+			detractors,
+			skippedTotal,
+			skippedDeleted,
+			skippedDead,
+			skippedEmpty,
+			topKeywords
+		};
 	});
 
 	function pct(n: number) {
@@ -55,23 +84,33 @@
 		if (nps >= -50) return 'Negative';
 		return 'Very Negative';
 	});
+
+	let skippedBreakdown = $derived.by(() => {
+		const parts: string[] = [];
+		if (stats.skippedDeleted > 0) parts.push(`${stats.skippedDeleted} deleted`);
+		if (stats.skippedDead > 0) parts.push(`${stats.skippedDead} dead`);
+		if (stats.skippedEmpty > 0) parts.push(`${stats.skippedEmpty} empty`);
+		return parts.join(', ');
+	});
 </script>
 
-<div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">
+<div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4 transition-opacity {analyzing ? 'opacity-70' : 'opacity-100'}">
 	<div>
 		<h2 class="text-lg font-semibold">{post.title}</h2>
 		<p class="text-sm text-gray-600 dark:text-gray-400">
 			{post.score} points by {post.author} | {stats.total} comments
 		</p>
+		{#if analysisModel}
+			<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+				Model: {analysisModel}
+			</p>
+		{/if}
 	</div>
 
 		{#if stats.analyzed > 0}
-			<div>
-				<h3 class="text-sm font-medium">Summary</h3>
-				<p class="text-xs text-gray-500 dark:text-gray-400">
-					Computed with {analysisModel || 'unknown model'}
-				</p>
-			</div>
+			{#if sentimentQuestion}
+				<p class="text-sm italic text-gray-600 dark:text-gray-400">{sentimentQuestion}</p>
+			{/if}
 
 			<!-- NPS Score -->
 			<div class="flex items-center gap-4">
@@ -94,8 +133,13 @@
 					<span>+100</span>
 				</div>
 			</div>
-			<div class="text-sm text-gray-500 dark:text-gray-400">
-				{stats.analyzed} of {stats.total} analyzed
+			<div class="text-sm text-gray-500 dark:text-gray-400 text-right">
+				<div>{stats.analyzed} of {stats.analyzable}</div>
+				{#if stats.skippedTotal > 0}
+					<div class="text-xs">
+						{stats.skippedTotal} skipped ({skippedBreakdown})
+					</div>
+				{/if}
 			</div>
 		</div>
 
@@ -113,6 +157,17 @@
 					<div class="text-sm text-red-600 dark:text-red-500">Detractors ({stats.detractors})</div>
 				</div>
 			</div>
+
+		<div>
+			<h3 class="text-sm font-medium mb-1">Thread Summary</h3>
+			{#if generatingThreadSummary}
+				<p class="text-sm text-gray-500 dark:text-gray-400 italic">Generating top-level summary...</p>
+			{:else if threadSummary}
+				<p class="text-sm text-gray-700 dark:text-gray-300">{threadSummary}</p>
+			{:else}
+				<p class="text-sm text-gray-500 dark:text-gray-400">Summary will appear after analysis completes.</p>
+			{/if}
+		</div>
 
 		{#if stats.topKeywords.length > 0}
 			<div>

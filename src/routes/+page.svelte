@@ -10,8 +10,8 @@
 	import KeywordsTable from '$lib/components/KeywordsTable.svelte';
 	import SplitPane from '$lib/components/SplitPane.svelte';
 	import { parsePostId, fetchPost, fetchComments, flattenComments, sortCommentsTree, generateSentimentQuestion as generateBasicQuestion } from '$lib/hn';
-	import { analyzeCommentsBatch, generateSentimentQuestion as generateAIQuestion } from '$lib/openrouter';
-	import { loadPrefs, savePrefs, saveAnalysis, loadAnalysis, loadAnyAnalysis, exportToFile, importFromFile, cacheHNData, getCachedHNData, type Preferences } from '$lib/storage';
+	import { analyzeCommentsBatch, generateSentimentQuestion as generateAIQuestion, generateThreadSummary, type ThreadSummaryInput } from '$lib/openrouter';
+	import { loadPrefs, savePrefs, saveAnalysis, loadAnalysis, loadAnyAnalysis, listAnalysisModels, exportToFile, importFromFile, cacheHNData, getCachedHNData, type Preferences } from '$lib/storage';
 	import { estimateTokens, formatCost, formatTokens } from '$lib/tokens';
 	import { DEFAULT_MODEL, SCHEMA_VERSION, type Comment, type HNPost, type AnalysisExport } from '$lib/schema';
 
@@ -22,10 +22,18 @@
 			const data: AnalysisExport = await res.json();
 			post = data.post;
 			comments = data.comments;
+			expandedKeywordRows = [];
+			returnKeyword = null;
+			threadSummary = data.threadSummary || '';
+			generatingThreadSummary = false;
 			sentimentQuestion = data.sentimentQuestion;
 			lastAnalysisModel = data.model || null;
 			lastAnalysisQuestion = data.sentimentQuestion || null;
-			if (data.model) prefs.model = data.model;
+			if (data.model && data.model !== prefs.model) {
+				suppressModelChangeReset = true;
+				prefs.model = data.model;
+			}
+			availableAnalysisModels = await listAnalysisModels(data.hnPostId);
 		} catch (e) {
 			error = 'Failed to load example';
 		}
@@ -40,6 +48,13 @@
 	let selectedId = $state<number | null>(null);
 	let activeTab = $state<'analysis' | 'keywords'>('analysis');
 	let highlightedKeyword = $state<string | null>(null);
+	let expandedKeywordRows = $state<string[]>([]);
+	let returnKeyword = $state<string | null>(null);
+	let lastSeenModel = $state(prefs.model);
+	let threadSummary = $state('');
+	let generatingThreadSummary = $state(false);
+	let availableAnalysisModels = $state<string[]>([]);
+	let suppressModelChangeReset = $state(false);
 
 	// Loading states
 	let loadingPost = $state(false);
@@ -115,6 +130,57 @@
 		savePrefs(prefs);
 	});
 
+	function clearCommentAnalysis(list: Comment[]): Comment[] {
+		return list.map((c) => ({
+			...c,
+			analysis: undefined,
+			children: clearCommentAnalysis(c.children)
+		}));
+	}
+
+	function resetThreadUiState() {
+		comments = [];
+		sentimentQuestion = '';
+		selectedId = null;
+		activeTab = 'analysis';
+		highlightedKeyword = null;
+		expandedKeywordRows = [];
+		returnKeyword = null;
+		threadSummary = '';
+		generatingThreadSummary = false;
+		availableAnalysisModels = [];
+		lastAnalysisModel = null;
+		lastAnalysisQuestion = null;
+		analyzeProgress = null;
+		discoveredComments = null;
+	}
+
+	// If model changes while analysis data is shown, clear old results so rerun starts from a clean slate.
+	$effect(() => {
+		const currentModel = prefs.model;
+		if (currentModel === lastSeenModel) return;
+		if (suppressModelChangeReset) {
+			lastSeenModel = currentModel;
+			suppressModelChangeReset = false;
+			return;
+		}
+		lastSeenModel = currentModel;
+
+		if (!post || comments.length === 0) return;
+		if (!flattenComments(comments).some((c) => c.analysis)) return;
+
+		comments = clearCommentAnalysis($state.snapshot(comments));
+		threadSummary = '';
+		generatingThreadSummary = false;
+		lastAnalysisModel = null;
+		lastAnalysisQuestion = null;
+		analyzeProgress = null;
+		activeTab = 'analysis';
+		highlightedKeyword = null;
+		expandedKeywordRows = [];
+		returnKeyword = null;
+	});
+
 	async function loadPost() {
 		error = '';
 		const id = parsePostId(postInput);
@@ -123,20 +189,33 @@
 			return;
 		}
 
+		const switchingPosts = post?.id !== id;
+		if (switchingPosts) {
+			abortController?.abort();
+			post = null;
+			resetThreadUiState();
+		}
+
 		// Check for cached analysis first (has sentiment data)
 		// Try current model first, then any cached analysis
 		let cachedAnalysis = await loadAnalysis(id, prefs.model);
-		if (!cachedAnalysis) {
+		if (!cachedAnalysis && switchingPosts) {
 			cachedAnalysis = await loadAnyAnalysis(id);
 		}
 		if (cachedAnalysis) {
 			post = cachedAnalysis.post;
 			comments = cachedAnalysis.comments;
+			threadSummary = cachedAnalysis.threadSummary || '';
+			generatingThreadSummary = false;
 			sentimentQuestion = cachedAnalysis.sentimentQuestion;
 			// Track the model/question that was used for this analysis
 			lastAnalysisModel = cachedAnalysis.model;
 			lastAnalysisQuestion = cachedAnalysis.sentimentQuestion;
-			if (cachedAnalysis.model) prefs.model = cachedAnalysis.model;
+			if (cachedAnalysis.model && cachedAnalysis.model !== prefs.model) {
+				suppressModelChangeReset = true;
+				prefs.model = cachedAnalysis.model;
+			}
+			availableAnalysisModels = await listAnalysisModels(id);
 			goto(`?post=${id}`, { replaceState: true });
 			return;
 		}
@@ -146,7 +225,10 @@
 		if (cachedHN) {
 			post = cachedHN.post;
 			comments = cachedHN.comments;
+			threadSummary = '';
+			generatingThreadSummary = false;
 			sentimentQuestion = generateBasicQuestion(post.title);
+			availableAnalysisModels = await listAnalysisModels(id);
 			goto(`?post=${id}`, { replaceState: true });
 			return;
 		}
@@ -161,6 +243,8 @@
 				return;
 			}
 			post = fetchedPost;
+			threadSummary = '';
+			generatingThreadSummary = false;
 			sentimentQuestion = generateBasicQuestion(post.title);
 
 			comments = await fetchComments(id, (count) => {
@@ -169,6 +253,7 @@
 
 			// Cache fetched data (snapshot to strip Svelte proxies)
 			await cacheHNData(id, $state.snapshot(post), $state.snapshot(comments));
+			availableAnalysisModels = await listAnalysisModels(id);
 
 			goto(`?post=${id}`, { replaceState: true });
 		} catch (e) {
@@ -189,6 +274,8 @@
 		error = '';
 		analyzing = true;
 		analyzeProgress = { done: 0, total: 0 };
+		threadSummary = '';
+		generatingThreadSummary = false;
 		abortController = new AbortController();
 
 		try {
@@ -209,12 +296,32 @@
 			lastAnalysisModel = prefs.model;
 			lastAnalysisQuestion = sentimentQuestion;
 
+			const summaryInput = buildThreadSummaryInput();
+			if (summaryInput && abortController && !abortController.signal.aborted) {
+				generatingThreadSummary = true;
+				try {
+					threadSummary = await generateThreadSummary(
+						prefs.apiKey,
+						prefs.model,
+						summaryInput,
+						abortController.signal,
+						prefs.threadSummaryPromptTemplate
+					);
+				} catch (e) {
+					if (e instanceof Error && e.name === 'AbortError') throw e;
+					console.warn('Failed to generate thread summary:', e);
+				} finally {
+					generatingThreadSummary = false;
+				}
+			}
+
 			// Save to IndexedDB
 			const exportData = buildExport();
 			const result = await saveAnalysis(exportData);
 			if (!result.ok) {
 				console.warn('Failed to save analysis:', result.error);
 			}
+			availableAnalysisModels = await listAnalysisModels(post.id);
 		} catch (e) {
 			if (e instanceof Error && e.name === 'AbortError') {
 				error = 'Analysis stopped';
@@ -241,8 +348,45 @@
 			sentimentQuestion,
 			model: prefs.model,
 			analyzedAt: new Date().toISOString(),
+			threadSummary: threadSummary || undefined,
 			post: $state.snapshot(post!),
 			comments: $state.snapshot(comments)
+		};
+	}
+
+	function buildThreadSummaryInput(): ThreadSummaryInput | null {
+		const flat = flattenComments(comments);
+		const analyzable = flat.filter((c) => c.text && !c.deleted && !c.dead);
+		const analyzed = analyzable.filter((c) => c.analysis);
+		if (analyzed.length === 0) return null;
+
+		const promoters = analyzed.filter((c) => c.analysis!.sentiment === 'promoter').length;
+		const neutrals = analyzed.filter((c) => c.analysis!.sentiment === 'neutral').length;
+		const detractors = analyzed.filter((c) => c.analysis!.sentiment === 'detractor').length;
+		const npsScore = Math.round((promoters / analyzed.length) * 100) - Math.round((detractors / analyzed.length) * 100);
+
+		const keywordCounts = new Map<string, number>();
+		for (const c of analyzed) {
+			for (const kw of c.analysis?.keywords || []) {
+				const lower = kw.toLowerCase();
+				keywordCounts.set(lower, (keywordCounts.get(lower) || 0) + 1);
+			}
+		}
+
+		const topKeywords = [...keywordCounts.entries()]
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, 10)
+			.map(([keyword, count]) => ({ keyword, count }));
+
+		return {
+			sentimentQuestion,
+			analyzableCount: analyzable.length,
+			analyzedCount: analyzed.length,
+			npsScore,
+			promoters,
+			neutrals,
+			detractors,
+			topKeywords
 		};
 	}
 
@@ -260,10 +404,18 @@
 			const data = await importFromFile(file);
 			post = data.post;
 			comments = data.comments;
+			expandedKeywordRows = [];
+			returnKeyword = null;
+			threadSummary = data.threadSummary || '';
+			generatingThreadSummary = false;
 			sentimentQuestion = data.sentimentQuestion;
 			lastAnalysisModel = data.model || null;
 			lastAnalysisQuestion = data.sentimentQuestion || null;
-			if (data.model) prefs.model = data.model;
+			if (data.model && data.model !== prefs.model) {
+				suppressModelChangeReset = true;
+				prefs.model = data.model;
+			}
+			availableAnalysisModels = await listAnalysisModels(data.hnPostId);
 			goto(`?post=${data.hnPostId}`, { replaceState: true });
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Import failed';
@@ -272,7 +424,6 @@
 	}
 
 	function selectComment(id: number) {
-		if (selectedId === id) return;
 		selectedId = id;
 		requestAnimationFrame(() => {
 			const threadEl = document.getElementById(`comment-${id}`);
@@ -291,6 +442,45 @@
 	function jumpToKeyword(keyword: string) {
 		highlightedKeyword = keyword.toLowerCase();
 		activeTab = 'keywords';
+	}
+
+	function jumpToCommentFromKeyword(commentId: number, keyword: string) {
+		returnKeyword = keyword.toLowerCase();
+		highlightedKeyword = keyword.toLowerCase();
+		activeTab = 'analysis';
+		requestAnimationFrame(() => {
+			selectComment(commentId);
+		});
+	}
+
+	function jumpBackToKeywordTab() {
+		if (!returnKeyword) return;
+		highlightedKeyword = returnKeyword;
+		activeTab = 'keywords';
+	}
+
+	async function switchModelResults(model: string) {
+		if (!post) return;
+		const cached = await loadAnalysis(post.id, model);
+		if (!cached) return;
+
+		post = cached.post;
+		comments = cached.comments;
+		sentimentQuestion = cached.sentimentQuestion;
+		threadSummary = cached.threadSummary || '';
+		generatingThreadSummary = false;
+		lastAnalysisModel = cached.model || model;
+		lastAnalysisQuestion = cached.sentimentQuestion || null;
+		activeTab = 'analysis';
+		highlightedKeyword = null;
+		expandedKeywordRows = [];
+		returnKeyword = null;
+		analyzeProgress = null;
+
+		if (model !== prefs.model) {
+			suppressModelChangeReset = true;
+			prefs.model = model;
+		}
 	}
 
 	function handleGlobalKeydown(e: KeyboardEvent) {
@@ -366,6 +556,7 @@
 		bind:model={prefs.model}
 		bind:questionPromptTemplate={prefs.questionPromptTemplate}
 		bind:analysisPromptTemplate={prefs.analysisPromptTemplate}
+		bind:threadSummaryPromptTemplate={prefs.threadSummaryPromptTemplate}
 		onLoad={loadPost}
 		loading={loadingPost}
 	/>
@@ -401,33 +592,36 @@
 	{/if}
 
 	{#if post}
-			<Dashboard {post} {comments} analysisModel={lastAnalysisModel || prefs.model} />
-
 		<div class="space-y-4">
-			<div>
-				<label for="sentiment-q" class="block text-sm font-medium mb-1">Sentiment Question</label>
-				<textarea
-					id="sentiment-q"
-					bind:value={sentimentQuestion}
-					rows="2"
-					class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-500 resize-y min-h-[2.5rem]"
-				></textarea>
-				<button
-					onclick={generateQuestion}
-					disabled={generatingQuestion || !prefs.apiKey}
-					class="mt-2 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
-					title={!prefs.apiKey ? 'Enter API key first' : 'Generate a better question using AI'}
-				>
-					{generatingQuestion ? 'Generating...' : 'Generate with AI'}
-				</button>
+			<div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3">
+				<div>
+					<label for="sentiment-q" class="block text-sm font-medium mb-1">Sentiment Question</label>
+					<textarea
+						id="sentiment-q"
+						bind:value={sentimentQuestion}
+						rows="2"
+						class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-500 resize-y min-h-[2.5rem]"
+					></textarea>
+				</div>
+
+				<div class="flex flex-wrap gap-3 items-start">
+					<button
+						onclick={generateQuestion}
+						disabled={generatingQuestion || !prefs.apiKey}
+						class="w-72 h-12 px-4 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+						title={!prefs.apiKey ? 'Enter API key first' : 'Generate a better question using AI'}
+					>
+						{generatingQuestion ? 'Generating...' : 'Generate Question with AI'}
+					</button>
+				</div>
 			</div>
 
-			<div class="space-y-2">
-				<div class="flex gap-2 flex-wrap items-center">
+			<div class="space-y-1">
+				<div class="flex gap-2 items-center flex-wrap">
 					<button
 						onclick={runAnalysis}
 						disabled={analyzing || !prefs.apiKey}
-						class="px-4 py-2 text-white rounded disabled:cursor-not-allowed transition-colors {hasAnalysis && !analysisStale ? 'bg-orange-400 hover:bg-orange-500' : 'bg-orange-600 hover:bg-orange-700'} {!prefs.apiKey ? 'opacity-50' : ''}"
+						class="w-72 h-12 px-4 text-white rounded disabled:cursor-not-allowed transition-colors {hasAnalysis && !analysisStale ? 'bg-orange-400 hover:bg-orange-500' : 'bg-orange-600 hover:bg-orange-700'} {!prefs.apiKey ? 'opacity-50' : ''}"
 						title={hasAnalysis && !analysisStale ? 'Analysis up to date (change model or question to re-run)' : ''}
 					>
 						{analyzing ? 'Analyzing...' : hasAnalysis && !analysisStale ? 'Re-run Analysis' : 'Run Analysis'}
@@ -435,25 +629,15 @@
 					{#if analyzing}
 						<button
 							onclick={stopAnalysis}
-							class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+							class="h-12 px-4 bg-red-600 text-white rounded hover:bg-red-700"
 						>
 							Stop
 						</button>
 					{/if}
-					<button
-						onclick={handleExport}
-						class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
-					>
-						Export JSON
-					</button>
-					<label class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
-						Import JSON
-						<input type="file" accept=".json" class="hidden" onchange={handleImport} />
-					</label>
 					{#if tokenEstimate}
-						<span class="text-sm text-gray-600 dark:text-gray-400">
+						<div class="text-sm text-gray-600 dark:text-gray-400">
 							Estimated: {formatTokens(tokenEstimate.totalTokens)} tokens ({tokenEstimate.commentCount} comments) &middot; {formatCost(tokenEstimate.estimatedCost)}
-						</span>
+						</div>
 					{/if}
 				</div>
 				{#if lastAnalysisModel}
@@ -461,6 +645,44 @@
 						Last run: {lastAnalysisModel}
 					</div>
 				{/if}
+			</div>
+
+			{#if availableAnalysisModels.length > 1}
+				<div class="flex flex-wrap gap-2">
+					{#each availableAnalysisModels as modelName}
+						<button
+							onclick={() => switchModelResults(modelName)}
+							class="px-2 py-1 text-xs border rounded {prefs.model === modelName ? 'border-orange-500 text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/20' : 'border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800'}"
+						>
+							{modelName}
+						</button>
+					{/each}
+				</div>
+			{/if}
+
+				<Dashboard
+					{post}
+					{comments}
+					analysisModel={lastAnalysisModel || prefs.model}
+					{analyzing}
+					{threadSummary}
+					{generatingThreadSummary}
+					{sentimentQuestion}
+				/>
+
+				<div class="space-y-2">
+				<div class="flex gap-2 flex-wrap items-center">
+					<label class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
+						Import JSON
+						<input type="file" accept=".json" class="hidden" onchange={handleImport} />
+					</label>
+					<button
+						onclick={handleExport}
+						class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+					>
+						Export JSON
+					</button>
+				</div>
 			</div>
 		</div>
 
@@ -489,6 +711,14 @@
 		<!-- Display toggles -->
 		{#if activeTab === 'analysis'}
 			<div class="flex gap-4 text-sm flex-wrap items-center">
+				{#if returnKeyword}
+					<button
+						class="px-2 py-1 border border-orange-300 text-orange-700 dark:text-orange-300 dark:border-orange-700 rounded hover:bg-orange-50 dark:hover:bg-orange-900/20"
+						onclick={jumpBackToKeywordTab}
+					>
+						Back to keyword: {returnKeyword}
+					</button>
+				{/if}
 				<label class="flex items-center gap-2">
 					<span>Sort</span>
 					<select
@@ -565,7 +795,13 @@
 					</SplitPane>
 				</div>
 			{:else}
-				<KeywordsTable {comments} {highlightedKeyword} />
+				<KeywordsTable
+					{comments}
+					{highlightedKeyword}
+					expandedKeywordsState={expandedKeywordRows}
+					onExpandedKeywordsChange={(keywords) => expandedKeywordRows = keywords}
+					onCommentJump={jumpToCommentFromKeyword}
+				/>
 			{/if}
 	{/if}
 </div>
