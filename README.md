@@ -16,10 +16,12 @@ Sentiment analysis tool for Hacker News threads. Analyze comment sentiment, extr
 
 ## Usage
 
-1. Paste an HN URL or post ID (e.g., `41780712` or `https://news.ycombinator.com/item?id=41780712`)
-2. Optionally adjust the sentiment question (auto-generated from the post title)
-3. Enter your [OpenRouter API key](https://openrouter.ai/keys)
-4. Select a model and run analysis
+1. Paste Hacker News URL / post ID.
+2. Load thread data.
+3. Enter your [OpenRouter API key](https://openrouter.ai/keys).
+4. Select LLM model.
+5. Fine tune sentiment question.
+6. Run analysis.
 
 To auto-load an exported analysis at startup, place it at `static/examples/startup-analysis.json` before building/deploying.
 

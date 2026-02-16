@@ -625,6 +625,18 @@
 </script>
 
 <div class="max-w-7xl mx-auto space-y-6">
+	<div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-2">
+		<h2 class="text-sm font-semibold">Usage</h2>
+			<ol class="list-decimal list-inside text-sm text-gray-700 dark:text-gray-300 space-y-1">
+				<li>Paste Hacker News URL / post ID.</li>
+				<li>Load thread data.</li>
+				<li>Enter your <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" class="text-orange-600 dark:text-orange-400 hover:underline">OpenRouter API key</a>.</li>
+				<li>Select LLM model.</li>
+				<li>Fine tune sentiment question.</li>
+				<li>Run analysis.</li>
+			</ol>
+		</div>
+
 	<InputPanel
 		bind:postInput
 		bind:apiKey={prefs.apiKey}
