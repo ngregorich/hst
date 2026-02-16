@@ -507,11 +507,11 @@
 								<h3 class="text-sm font-medium mb-2">Comment Tree</h3>
 								<p class="mb-2 text-xs text-gray-500 dark:text-gray-400">Use arrow keys to navigate</p>
 								<div class="mb-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-								<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block"></span>Promoter</span>
-								<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-slate-500 inline-block"></span>Neutral</span>
-								<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-red-500 inline-block"></span>Detractor</span>
-								<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-gray-200 dark:bg-gray-700 border border-gray-400 dark:border-gray-500 inline-block"></span>Not analyzed</span>
-							</div>
+									<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block"></span>Promoter</span>
+									<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-slate-500 inline-block"></span>Neutral</span>
+									<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm detractor-legend inline-block"></span>Detractor</span>
+									<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-gray-200 dark:bg-gray-700 border border-gray-400 dark:border-gray-500 inline-block"></span>Not analyzed</span>
+								</div>
 								<TreeView {comments} {selectedId} onSelect={selectComment} />
 							</div>
 						{/snippet}
@@ -538,3 +538,14 @@
 			{/if}
 	{/if}
 </div>
+
+<style>
+	.detractor-legend {
+		background-color: rgb(239 68 68);
+		background-image: repeating-linear-gradient(
+			135deg,
+			rgba(255, 255, 255, 0.7) 0 1px,
+			transparent 1px 4px
+		);
+	}
+</style>
