@@ -10,6 +10,7 @@
 		threadSummary?: string;
 		generatingThreadSummary?: boolean;
 		sentimentQuestion?: string;
+		onKeywordClick?: (keyword: string) => void;
 	}
 
 	let {
@@ -19,7 +20,8 @@
 		analyzing = false,
 		threadSummary = '',
 		generatingThreadSummary = false,
-		sentimentQuestion = ''
+		sentimentQuestion = '',
+		onKeywordClick
 	}: Props = $props();
 
 	let stats = $derived.by(() => {
@@ -174,9 +176,13 @@
 				<h3 class="text-sm font-medium mb-2">Top Keywords</h3>
 				<div class="flex flex-wrap gap-2">
 					{#each stats.topKeywords as [kw, count]}
-						<span class="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-sm">
+						<button
+							type="button"
+							class="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-sm hover:bg-gray-200 dark:hover:bg-gray-700"
+							onclick={() => onKeywordClick?.(kw)}
+						>
 							{kw} ({count})
-						</span>
+						</button>
 					{/each}
 				</div>
 			</div>

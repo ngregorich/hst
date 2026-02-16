@@ -21,7 +21,7 @@ Sentiment analysis tool for Hacker News threads. Analyze comment sentiment, extr
 3. Enter your [OpenRouter API key](https://openrouter.ai/keys)
 4. Select a model and run analysis
 
-No API key? Click "Load Example" to explore the UI with pre-analyzed data.
+To auto-load an exported analysis at startup, place it at `static/examples/startup-analysis.json` before building/deploying.
 
 ## Models
 
@@ -42,6 +42,14 @@ npm install
 npm run dev
 ```
 
+## Deploy to Cloudflare Pages (Static)
+
+1. Connect this repository in Cloudflare Pages
+2. Set build command to `npm run build`
+3. Set build output directory to `build`
+4. Use framework preset `None` (static site)
+5. Optional startup data: commit your exported JSON to `static/examples/startup-analysis.json`
+
 ### Commands
 
 | Command | Description |
@@ -57,7 +65,7 @@ npm run dev
 
 - [SvelteKit](https://kit.svelte.dev/) with Svelte 5
 - [Tailwind CSS](https://tailwindcss.com/)
-- [Cloudflare Pages](https://pages.cloudflare.com/) adapter
+- [Cloudflare Pages](https://pages.cloudflare.com/) static hosting
 - [Vitest](https://vitest.dev/) + [Playwright](https://playwright.dev/)
 - [idb-keyval](https://github.com/jakearchibald/idb-keyval) for IndexedDB
 

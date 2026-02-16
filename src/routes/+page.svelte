@@ -10,34 +10,12 @@
 	import KeywordsTable from '$lib/components/KeywordsTable.svelte';
 	import SplitPane from '$lib/components/SplitPane.svelte';
 	import { parsePostId, fetchPost, fetchComments, flattenComments, sortCommentsTree, generateSentimentQuestion as generateBasicQuestion } from '$lib/hn';
-	import { analyzeCommentsBatch, generateSentimentQuestion as generateAIQuestion, generateThreadSummary, type ThreadSummaryInput } from '$lib/openrouter';
+	import { analyzeCommentsBatch, generateSentimentQuestion as generateAIQuestion, generateThreadSummary, type ThreadSummaryInput, type OpenRouterDebugEvent } from '$lib/openrouter';
 	import { loadPrefs, savePrefs, saveAnalysis, loadAnalysis, loadAnyAnalysis, listAnalysisModels, exportToFile, importFromFile, cacheHNData, getCachedHNData, type Preferences } from '$lib/storage';
 	import { estimateTokens, formatCost, formatTokens } from '$lib/tokens';
 	import { DEFAULT_MODEL, SCHEMA_VERSION, type Comment, type HNPost, type AnalysisExport } from '$lib/schema';
 
-	// Example loading
-	async function loadExample() {
-		try {
-			const res = await fetch('/examples/example-thread.json');
-			const data: AnalysisExport = await res.json();
-			post = data.post;
-			comments = data.comments;
-			expandedKeywordRows = [];
-			returnKeyword = null;
-			threadSummary = data.threadSummary || '';
-			generatingThreadSummary = false;
-			sentimentQuestion = data.sentimentQuestion;
-			lastAnalysisModel = data.model || null;
-			lastAnalysisQuestion = data.sentimentQuestion || null;
-			if (data.model && data.model !== prefs.model) {
-				suppressModelChangeReset = true;
-				prefs.model = data.model;
-			}
-			availableAnalysisModels = await listAnalysisModels(data.hnPostId);
-		} catch (e) {
-			error = 'Failed to load example';
-		}
-	}
+	const STARTUP_ANALYSIS_PATH = '/examples/startup-analysis.json';
 
 	// State
 	let prefs = $state<Preferences>(loadPrefs());
@@ -55,6 +33,19 @@
 	let generatingThreadSummary = $state(false);
 	let availableAnalysisModels = $state<string[]>([]);
 	let suppressModelChangeReset = $state(false);
+	let apiDebug = $state({
+		question: null as OpenRouterDebugEvent | null,
+		threadSummary: null as OpenRouterDebugEvent | null,
+		comment: {
+			requests: 0,
+			inputTokens: 0,
+			outputTokens: 0,
+			totalTokens: 0,
+			truncated: 0,
+			finishReasons: {} as Record<string, number>,
+			last: null as OpenRouterDebugEvent | null
+		}
+	});
 
 	// Loading states
 	let loadingPost = $state(false);
@@ -107,7 +98,9 @@
 			if (postParam) {
 				postInput = postParam;
 				await loadPost();
+				return;
 			}
+			await loadStartupAnalysis();
 		})();
 
 		return () => {
@@ -153,6 +146,76 @@
 		lastAnalysisQuestion = null;
 		analyzeProgress = null;
 		discoveredComments = null;
+		apiDebug = {
+			question: null,
+			threadSummary: null,
+			comment: {
+				requests: 0,
+				inputTokens: 0,
+				outputTokens: 0,
+				totalTokens: 0,
+				truncated: 0,
+				finishReasons: {},
+				last: null
+			}
+		};
+	}
+
+	function handleApiDebug(event: OpenRouterDebugEvent) {
+		if (event.operation === 'question') {
+			apiDebug.question = event;
+			return;
+		}
+		if (event.operation === 'thread_summary') {
+			apiDebug.threadSummary = event;
+			return;
+		}
+
+		const reason = event.finishReason || 'unknown';
+		apiDebug.comment.requests += 1;
+		apiDebug.comment.inputTokens += event.inputTokens;
+		apiDebug.comment.outputTokens += event.outputTokens;
+		apiDebug.comment.totalTokens += event.totalTokens;
+		if (event.truncated) apiDebug.comment.truncated += 1;
+		apiDebug.comment.finishReasons[reason] = (apiDebug.comment.finishReasons[reason] || 0) + 1;
+		apiDebug.comment.last = event;
+	}
+
+	let commentFinishReasonsText = $derived.by(() => {
+		const entries = Object.entries(apiDebug.comment.finishReasons).sort((a, b) => b[1] - a[1]);
+		if (entries.length === 0) return 'none yet';
+		return entries.map(([reason, count]) => `${reason}: ${count}`).join(', ');
+	});
+
+	async function applyImportedAnalysis(data: AnalysisExport): Promise<void> {
+		post = data.post;
+		comments = data.comments;
+		postInput = String(data.hnPostId);
+		expandedKeywordRows = [];
+		returnKeyword = null;
+		threadSummary = data.threadSummary || '';
+		generatingThreadSummary = false;
+		sentimentQuestion = data.sentimentQuestion;
+		lastAnalysisModel = data.model || null;
+		lastAnalysisQuestion = data.sentimentQuestion || null;
+		if (data.model && data.model !== prefs.model) {
+			suppressModelChangeReset = true;
+			prefs.model = data.model;
+		}
+		availableAnalysisModels = await listAnalysisModels(data.hnPostId);
+		goto(`?post=${data.hnPostId}`, { replaceState: true });
+	}
+
+	async function loadStartupAnalysis() {
+		try {
+			const res = await fetch(STARTUP_ANALYSIS_PATH, { cache: 'no-store' });
+			if (!res.ok) return;
+			const data: AnalysisExport = await res.json();
+			if (!data?.hnPostId || !data?.post || !Array.isArray(data?.comments)) return;
+			await applyImportedAnalysis(data);
+		} catch {
+			// Optional startup file; ignore if missing or invalid.
+		}
 	}
 
 	// If model changes while analysis data is shown, clear old results so rerun starts from a clean slate.
@@ -277,6 +340,16 @@
 		threadSummary = '';
 		generatingThreadSummary = false;
 		abortController = new AbortController();
+		apiDebug.comment = {
+			requests: 0,
+			inputTokens: 0,
+			outputTokens: 0,
+			totalTokens: 0,
+			truncated: 0,
+			finishReasons: {},
+			last: null
+		};
+		apiDebug.threadSummary = null;
 
 		try {
 			await analyzeCommentsBatch(
@@ -289,7 +362,8 @@
 					analyzeProgress = { done, total };
 				},
 				abortController.signal,
-				prefs.analysisPromptTemplate
+				prefs.analysisPromptTemplate,
+				handleApiDebug
 			);
 
 			// Track what settings were used
@@ -305,7 +379,8 @@
 						prefs.model,
 						summaryInput,
 						abortController.signal,
-						prefs.threadSummaryPromptTemplate
+						prefs.threadSummaryPromptTemplate,
+						handleApiDebug
 					);
 				} catch (e) {
 					if (e instanceof Error && e.name === 'AbortError') throw e;
@@ -402,21 +477,7 @@
 
 		try {
 			const data = await importFromFile(file);
-			post = data.post;
-			comments = data.comments;
-			expandedKeywordRows = [];
-			returnKeyword = null;
-			threadSummary = data.threadSummary || '';
-			generatingThreadSummary = false;
-			sentimentQuestion = data.sentimentQuestion;
-			lastAnalysisModel = data.model || null;
-			lastAnalysisQuestion = data.sentimentQuestion || null;
-			if (data.model && data.model !== prefs.model) {
-				suppressModelChangeReset = true;
-				prefs.model = data.model;
-			}
-			availableAnalysisModels = await listAnalysisModels(data.hnPostId);
-			goto(`?post=${data.hnPostId}`, { replaceState: true });
+			await applyImportedAnalysis(data);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Import failed';
 		}
@@ -539,7 +600,8 @@
 				prefs.model,
 				post,
 				comments,
-				prefs.questionPromptTemplate
+				prefs.questionPromptTemplate,
+				handleApiDebug
 			);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to generate question';
@@ -580,14 +642,8 @@
 		<div class="border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center space-y-4">
 			<h2 class="text-lg font-medium">Analyze sentiment in Hacker News threads</h2>
 			<p class="text-gray-600 dark:text-gray-400">
-				Paste an HN URL or post ID above, or try an example to see how it works.
+				Paste an HN URL/post ID, or place an exported JSON at <code>{STARTUP_ANALYSIS_PATH}</code> to auto-load on startup.
 			</p>
-			<button
-				onclick={loadExample}
-				class="px-4 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
-			>
-				Load Example
-			</button>
 		</div>
 	{/if}
 
@@ -647,6 +703,28 @@
 				{/if}
 			</div>
 
+			{#if prefs.showApiDebug}
+				<div class="border border-gray-200 dark:border-gray-700 rounded p-3 text-xs space-y-2 bg-gray-50 dark:bg-gray-900/30">
+					<div class="font-medium">API Debug</div>
+					{#if apiDebug.question}
+						<div>
+							Question: {apiDebug.question.model} | finish: {apiDebug.question.finishReason} | out: {apiDebug.question.outputTokens} | in: {apiDebug.question.inputTokens}
+						</div>
+					{/if}
+					<div>
+						Comments: {apiDebug.comment.requests} calls | out: {apiDebug.comment.outputTokens} | in: {apiDebug.comment.inputTokens} | truncated: {apiDebug.comment.truncated}
+					</div>
+					<div>
+						Comment finish reasons: {commentFinishReasonsText}
+					</div>
+					{#if apiDebug.threadSummary}
+						<div>
+							Thread summary: {apiDebug.threadSummary.model} | finish: {apiDebug.threadSummary.finishReason} | out: {apiDebug.threadSummary.outputTokens} | in: {apiDebug.threadSummary.inputTokens}
+						</div>
+					{/if}
+				</div>
+			{/if}
+
 			{#if availableAnalysisModels.length > 1}
 				<div class="flex flex-wrap gap-2">
 					{#each availableAnalysisModels as modelName}
@@ -668,6 +746,7 @@
 					{threadSummary}
 					{generatingThreadSummary}
 					{sentimentQuestion}
+					onKeywordClick={jumpToKeyword}
 				/>
 
 				<div class="space-y-2">
@@ -755,6 +834,10 @@
 				<label class="flex items-center gap-2">
 					<input type="checkbox" bind:checked={prefs.showKeywords} class="rounded" />
 					Keywords
+				</label>
+				<label class="flex items-center gap-2">
+					<input type="checkbox" bind:checked={prefs.showApiDebug} class="rounded" />
+					API Debug
 				</label>
 			</div>
 		{/if}

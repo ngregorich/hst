@@ -3,6 +3,34 @@ import { DEFAULT_ANALYSIS_PROMPT_TEMPLATE, DEFAULT_QUESTION_PROMPT_TEMPLATE, DEF
 
 const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
+export interface OpenRouterDebugEvent {
+	operation: 'question' | 'comment' | 'thread_summary';
+	model: string;
+	status: number;
+	finishReason: string;
+	inputTokens: number;
+	outputTokens: number;
+	totalTokens: number;
+	truncated: boolean;
+}
+
+function extractMessageText(content: unknown): string {
+	if (typeof content === 'string') return content;
+	if (Array.isArray(content)) {
+		return content
+			.map((part) => {
+				if (typeof part === 'string') return part;
+				if (part && typeof part === 'object' && 'text' in part && typeof part.text === 'string') {
+					return part.text;
+				}
+				return '';
+			})
+			.join('')
+			.trim();
+	}
+	return '';
+}
+
 export interface ThreadSummaryInput {
 	sentimentQuestion: string;
 	analyzableCount: number;
@@ -19,7 +47,8 @@ export async function generateSentimentQuestion(
 	model: string,
 	post: HNPost,
 	comments?: Comment[],
-	questionPromptTemplate?: string
+	questionPromptTemplate?: string,
+	onDebug?: (event: OpenRouterDebugEvent) => void
 ): Promise<string> {
 	// Get top 3 parent comments for context
 	const topComments = comments?.slice(0, 3).map(c => c.text?.slice(0, 300)).filter(Boolean) || [];
@@ -52,8 +81,7 @@ export async function generateSentimentQuestion(
 			model,
 			messages: [{ role: 'user', content: prompt }],
 			temperature: 0.3,
-			max_tokens: 200,
-			reasoning: { effort: 'low' }
+			max_tokens: 300
 		})
 	});
 
@@ -74,13 +102,31 @@ export async function generateSentimentQuestion(
 		throw new Error('No choices in API response');
 	}
 
-	const content = choice?.message?.content;
+	const finishReason = choice?.finish_reason || choice?.native_finish_reason;
+	const usage = data.usage || {};
+	const inputTokens = Number(usage.prompt_tokens ?? usage.input_tokens ?? 0);
+	const outputTokens = Number(usage.completion_tokens ?? usage.output_tokens ?? 0);
+	const totalTokens = Number(usage.total_tokens ?? inputTokens + outputTokens);
+	const truncated = finishReason === 'length' || finishReason === 'max_output_tokens';
+	onDebug?.({
+		operation: 'question',
+		model: String(data.model || model),
+		status: res.status,
+		finishReason: String(finishReason || 'unknown'),
+		inputTokens: Number.isFinite(inputTokens) ? inputTokens : 0,
+		outputTokens: Number.isFinite(outputTokens) ? outputTokens : 0,
+		totalTokens: Number.isFinite(totalTokens) ? totalTokens : 0,
+		truncated
+	});
+	const content = extractMessageText(choice?.message?.content);
 	if (!content) {
-		const finishReason = choice?.finish_reason || choice?.native_finish_reason;
-		if (finishReason === 'length' || finishReason === 'max_output_tokens') {
+		if (truncated) {
 			throw new Error('Model ran out of tokens - try a non-reasoning model like anthropic/claude-haiku-4.5');
 		}
 		throw new Error(`Model returned no content (model: ${data.model}) - try anthropic/claude-haiku-4.5`);
+	}
+	if (truncated) {
+		throw new Error('Model output was truncated. Please retry or use a model with higher output limits.');
 	}
 
 	return content.trim().replace(/^["']|["']$/g, '');
@@ -139,7 +185,8 @@ export async function analyzeComment(
 	sentimentQuestion: string,
 	comment: Comment,
 	signal?: AbortSignal,
-	analysisPromptTemplate?: string
+	analysisPromptTemplate?: string,
+	onDebug?: (event: OpenRouterDebugEvent) => void
 ): Promise<CommentAnalysis | null> {
 	if (!comment.text || comment.deleted || comment.dead) return null;
 
@@ -154,7 +201,8 @@ export async function analyzeComment(
 		body: JSON.stringify({
 			model,
 			messages: [{ role: 'user', content: buildPrompt(sentimentQuestion, comment.text, analysisPromptTemplate) }],
-			temperature: 0.3
+			temperature: 0.3,
+			max_tokens: 320
 		}),
 		signal
 	});
@@ -165,7 +213,24 @@ export async function analyzeComment(
 	}
 
 	const data = await res.json();
-	const content = data.choices?.[0]?.message?.content;
+	const choice = data.choices?.[0];
+	const finishReason = choice?.finish_reason || choice?.native_finish_reason;
+	const usage = data.usage || {};
+	const inputTokens = Number(usage.prompt_tokens ?? usage.input_tokens ?? 0);
+	const outputTokens = Number(usage.completion_tokens ?? usage.output_tokens ?? 0);
+	const totalTokens = Number(usage.total_tokens ?? inputTokens + outputTokens);
+	onDebug?.({
+		operation: 'comment',
+		model: String(data.model || model),
+		status: res.status,
+		finishReason: String(finishReason || 'unknown'),
+		inputTokens: Number.isFinite(inputTokens) ? inputTokens : 0,
+		outputTokens: Number.isFinite(outputTokens) ? outputTokens : 0,
+		totalTokens: Number.isFinite(totalTokens) ? totalTokens : 0,
+		truncated: finishReason === 'length' || finishReason === 'max_output_tokens'
+	});
+
+	const content = extractMessageText(choice?.message?.content);
 	if (!content) return null;
 
 	return parseResponse(content);
@@ -176,7 +241,8 @@ export async function generateThreadSummary(
 	model: string,
 	input: ThreadSummaryInput,
 	signal?: AbortSignal,
-	threadSummaryPromptTemplate?: string
+	threadSummaryPromptTemplate?: string,
+	onDebug?: (event: OpenRouterDebugEvent) => void
 ): Promise<string> {
 	const keywordList = input.topKeywords.map((k) => `${k.keyword} (${k.count})`).join(', ') || 'none';
 	const prompt = renderPromptTemplate(
@@ -205,8 +271,7 @@ export async function generateThreadSummary(
 			model,
 			messages: [{ role: 'user', content: prompt }],
 			temperature: 0.2,
-			max_tokens: 220,
-			reasoning: { effort: 'low' }
+			max_tokens: 280
 		}),
 		signal
 	});
@@ -217,7 +282,24 @@ export async function generateThreadSummary(
 	}
 
 	const data = await res.json();
-	const content = data.choices?.[0]?.message?.content;
+	const choice = data.choices?.[0];
+	const finishReason = choice?.finish_reason || choice?.native_finish_reason;
+	const usage = data.usage || {};
+	const inputTokens = Number(usage.prompt_tokens ?? usage.input_tokens ?? 0);
+	const outputTokens = Number(usage.completion_tokens ?? usage.output_tokens ?? 0);
+	const totalTokens = Number(usage.total_tokens ?? inputTokens + outputTokens);
+	onDebug?.({
+		operation: 'thread_summary',
+		model: String(data.model || model),
+		status: res.status,
+		finishReason: String(finishReason || 'unknown'),
+		inputTokens: Number.isFinite(inputTokens) ? inputTokens : 0,
+		outputTokens: Number.isFinite(outputTokens) ? outputTokens : 0,
+		totalTokens: Number.isFinite(totalTokens) ? totalTokens : 0,
+		truncated: finishReason === 'length' || finishReason === 'max_output_tokens'
+	});
+
+	const content = extractMessageText(choice?.message?.content);
 	if (!content) throw new Error('No summary content returned');
 
 	return content.trim();
@@ -233,7 +315,8 @@ export async function analyzeCommentsBatch(
 	_batchSize: number, // deprecated, kept for API compat
 	onProgress: (done: number, total: number) => void,
 	signal?: AbortSignal,
-	analysisPromptTemplate?: string
+	analysisPromptTemplate?: string,
+	onDebug?: (event: OpenRouterDebugEvent) => void
 ): Promise<void> {
 	const total = countComments(comments);
 	let done = 0;
@@ -243,7 +326,7 @@ export async function analyzeCommentsBatch(
 		if (signal?.aborted) return;
 		if (comment.text && !comment.deleted && !comment.dead) {
 			try {
-				const analysis = await analyzeComment(apiKey, model, sentimentQuestion, comment, signal, analysisPromptTemplate);
+				const analysis = await analyzeComment(apiKey, model, sentimentQuestion, comment, signal, analysisPromptTemplate, onDebug);
 				if (analysis) comment.analysis = analysis;
 			} catch (e) {
 				if (e instanceof Error && e.name === 'AbortError') throw e;

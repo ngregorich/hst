@@ -46,6 +46,7 @@ export interface Preferences {
 	showCommentText: boolean;
 	showAuthor: boolean;
 	showTime: boolean;
+	showApiDebug: boolean;
 	questionPromptTemplate: string;
 	analysisPromptTemplate: string;
 	threadSummaryPromptTemplate: string;
@@ -62,6 +63,7 @@ const defaultPrefs: Preferences = {
 	showCommentText: true,
 	showAuthor: true,
 	showTime: true,
+	showApiDebug: false,
 	questionPromptTemplate: DEFAULT_QUESTION_PROMPT_TEMPLATE,
 	analysisPromptTemplate: DEFAULT_ANALYSIS_PROMPT_TEMPLATE,
 	threadSummaryPromptTemplate: DEFAULT_THREAD_SUMMARY_PROMPT_TEMPLATE
@@ -174,8 +176,16 @@ export function exportToFile(data: AnalysisExport): void {
 	const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
 	const url = URL.createObjectURL(blob);
 	const a = document.createElement('a');
+	const safeModel = (data.model || 'unknown-model')
+		.toLowerCase()
+		.replace(/[^a-z0-9._-]+/g, '-')
+		.replace(/^-+|-+$/g, '');
+	const runDate = new Date(data.analyzedAt || Date.now());
+	const runTimestamp = Number.isNaN(runDate.getTime())
+		? 'unknown-time'
+		: runDate.toISOString().replace(/\.\d{3}Z$/, 'Z').replace(/[:T]/g, '-').replace('Z', 'Z');
 	a.href = url;
-	a.download = `hn-${data.hnPostId}-analysis.json`;
+	a.download = `hn-${data.hnPostId}-${safeModel}-${runTimestamp}-analysis.json`;
 	a.click();
 	URL.revokeObjectURL(url);
 }
