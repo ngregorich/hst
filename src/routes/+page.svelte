@@ -9,7 +9,7 @@
 	import ThreadView from '$lib/components/ThreadView.svelte';
 	import KeywordsTable from '$lib/components/KeywordsTable.svelte';
 	import SplitPane from '$lib/components/SplitPane.svelte';
-	import { parsePostId, fetchPost, fetchComments, generateSentimentQuestion as generateBasicQuestion } from '$lib/hn';
+	import { parsePostId, fetchPost, fetchComments, flattenComments, generateSentimentQuestion as generateBasicQuestion } from '$lib/hn';
 	import { analyzeCommentsBatch, generateSentimentQuestion as generateAIQuestion } from '$lib/openrouter';
 	import { loadPrefs, savePrefs, saveAnalysis, loadAnalysis, loadAnyAnalysis, exportToFile, importFromFile, cacheHNData, getCachedHNData, type Preferences } from '$lib/storage';
 	import { estimateTokens, formatCost, formatTokens } from '$lib/tokens';
@@ -23,6 +23,8 @@
 			post = data.post;
 			comments = data.comments;
 			sentimentQuestion = data.sentimentQuestion;
+			lastAnalysisModel = data.model || null;
+			lastAnalysisQuestion = data.sentimentQuestion || null;
 			if (data.model) prefs.model = data.model;
 		} catch (e) {
 			error = 'Failed to load example';
@@ -59,16 +61,50 @@
 	let hasAnalysis = $derived(
 		comments.some(c => c.analysis || c.children.some(cc => cc.analysis))
 	);
+	let navIndex = $derived.by(() => {
+		const flat = flattenComments(comments);
+		const flatIds = flat.map((c) => c.id);
+		const positionById = new Map<number, number>();
+		const childrenById = new Map<number, number[]>();
+		const parentById = new Map<number, number | null>();
+
+		for (const c of flat) {
+			childrenById.set(c.id, c.children.map((cc) => cc.id));
+			parentById.set(c.id, c.parentId);
+		}
+		for (let i = 0; i < flatIds.length; i++) {
+			positionById.set(flatIds[i], i);
+		}
+
+		return { flatIds, positionById, childrenById, parentById };
+	});
 
 	// Derived
 	let tokenEstimate = $derived(comments.length > 0 ? estimateTokens(comments, prefs.model) : null);
 
-	// Load from URL param on mount
-	onMount(async () => {
-		const postParam = $page.url.searchParams.get('post');
-		if (postParam) {
-			postInput = postParam;
-			await loadPost();
+	// Load from URL param on mount + enable global keyboard navigation
+	onMount(() => {
+		window.addEventListener('keydown', handleGlobalKeydown);
+		(async () => {
+			const postParam = $page.url.searchParams.get('post');
+			if (postParam) {
+				postInput = postParam;
+				await loadPost();
+			}
+		})();
+
+		return () => {
+			window.removeEventListener('keydown', handleGlobalKeydown);
+		};
+	});
+
+	$effect(() => {
+		if (comments.length === 0) {
+			selectedId = null;
+			return;
+		}
+		if (selectedId === null || !navIndex.positionById.has(selectedId)) {
+			selectComment(comments[0].id);
 		}
 	});
 
@@ -222,6 +258,8 @@
 			post = data.post;
 			comments = data.comments;
 			sentimentQuestion = data.sentimentQuestion;
+			lastAnalysisModel = data.model || null;
+			lastAnalysisQuestion = data.sentimentQuestion || null;
 			if (data.model) prefs.model = data.model;
 			goto(`?post=${data.hnPostId}`, { replaceState: true });
 		} catch (e) {
@@ -231,10 +269,66 @@
 	}
 
 	function selectComment(id: number) {
+		if (selectedId === id) return;
 		selectedId = id;
-		// Scroll to comment in thread view
-		const el = document.getElementById(`comment-${id}`);
-		el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		requestAnimationFrame(() => {
+			const threadEl = document.getElementById(`comment-${id}`);
+			threadEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			const treeEl = document.getElementById(`tree-node-${id}`);
+			treeEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+		});
+	}
+
+	function isTypingTarget(target: EventTarget | null): boolean {
+		if (!(target instanceof HTMLElement)) return false;
+		const tag = target.tagName.toLowerCase();
+		return tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable;
+	}
+
+	function handleGlobalKeydown(e: KeyboardEvent) {
+		if (activeTab !== 'analysis' || comments.length === 0 || isTypingTarget(e.target)) return;
+
+		const firstId = navIndex.flatIds[0];
+		if (selectedId === null) {
+			if (firstId !== undefined) {
+				e.preventDefault();
+				selectComment(firstId);
+			}
+			return;
+		}
+
+		const currentPos = navIndex.positionById.get(selectedId);
+		if (currentPos === undefined) return;
+
+		let nextId: number | null = null;
+		switch (e.key) {
+			case 'ArrowDown':
+				nextId = currentPos < navIndex.flatIds.length - 1 ? navIndex.flatIds[currentPos + 1] : null;
+				break;
+			case 'ArrowUp':
+				nextId = currentPos > 0 ? navIndex.flatIds[currentPos - 1] : null;
+				break;
+			case 'ArrowRight': {
+				const children = navIndex.childrenById.get(selectedId) || [];
+				nextId = children[0] ?? null;
+				break;
+			}
+			case 'ArrowLeft':
+				nextId = navIndex.parentById.get(selectedId) ?? null;
+				break;
+			case 'Home':
+				nextId = firstId ?? null;
+				break;
+			case 'End':
+				nextId = navIndex.flatIds.length > 0 ? navIndex.flatIds[navIndex.flatIds.length - 1] : null;
+				break;
+			default:
+				return;
+		}
+
+		if (nextId === null || nextId === selectedId) return;
+		e.preventDefault();
+		selectComment(nextId);
 	}
 
 	async function generateQuestion() {
@@ -291,7 +385,7 @@
 	{/if}
 
 	{#if post}
-		<Dashboard {post} {comments} />
+			<Dashboard {post} {comments} analysisModel={lastAnalysisModel || prefs.model} />
 
 		<div class="space-y-4">
 			<div>
@@ -405,33 +499,42 @@
 			</div>
 		{/if}
 
-		{#if activeTab === 'analysis'}
-			<SplitPane initialWidth={200} minWidth={80} maxWidth={400}>
-				{#snippet left()}
-					<div class="border border-gray-200 dark:border-gray-700 rounded p-3 mr-1 overflow-x-auto">
-						<h3 class="text-sm font-medium mb-2">Comment Tree</h3>
-						<TreeView {comments} {selectedId} onSelect={selectComment} />
-					</div>
-				{/snippet}
-				{#snippet right()}
-					<div class="pl-2">
-						<ThreadView
-							{comments}
-							{selectedId}
-							{analyzing}
-							showCommentText={prefs.showCommentText}
-							showAuthor={prefs.showAuthor}
-							showTime={prefs.showTime}
-							showSummary={prefs.showSummary}
-							showKeywords={prefs.showKeywords}
-							showSentiment={prefs.showSentiment}
-							onSelect={selectComment}
-						/>
-					</div>
-				{/snippet}
-			</SplitPane>
-		{:else}
-			<KeywordsTable {comments} />
-		{/if}
+			{#if activeTab === 'analysis'}
+				<div class="h-[70vh] min-h-[420px] max-h-[900px] overflow-hidden">
+					<SplitPane initialWidth={200} minWidth={80} maxWidth={400}>
+						{#snippet left()}
+							<div class="h-full border border-gray-200 dark:border-gray-700 rounded p-3 mr-1 overflow-auto">
+								<h3 class="text-sm font-medium mb-2">Comment Tree</h3>
+								<p class="mb-2 text-xs text-gray-500 dark:text-gray-400">Use arrow keys to navigate</p>
+								<div class="mb-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+								<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block"></span>Promoter</span>
+								<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-slate-500 inline-block"></span>Neutral</span>
+								<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-red-500 inline-block"></span>Detractor</span>
+								<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-gray-200 dark:bg-gray-700 border border-gray-400 dark:border-gray-500 inline-block"></span>Not analyzed</span>
+							</div>
+								<TreeView {comments} {selectedId} onSelect={selectComment} />
+							</div>
+						{/snippet}
+						{#snippet right()}
+							<div class="h-full pl-2 overflow-auto">
+								<ThreadView
+									{comments}
+									{selectedId}
+									{analyzing}
+									showCommentText={prefs.showCommentText}
+									showAuthor={prefs.showAuthor}
+									showTime={prefs.showTime}
+									showSummary={prefs.showSummary}
+									showKeywords={prefs.showKeywords}
+									showSentiment={prefs.showSentiment}
+									onSelect={selectComment}
+								/>
+							</div>
+						{/snippet}
+					</SplitPane>
+				</div>
+			{:else}
+				<KeywordsTable {comments} />
+			{/if}
 	{/if}
 </div>

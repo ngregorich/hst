@@ -42,16 +42,16 @@
 	});
 </script>
 
-<div bind:this={container} class="flex w-full {dragging ? 'select-none' : ''}">
-	<div style="width: {width}px; flex-shrink: 0;">
+<div bind:this={container} class="flex w-full h-full {dragging ? 'select-none' : ''}">
+	<div class="h-full" style="width: {width}px; flex-shrink: 0;">
 		{@render left()}
 	</div>
 	<button
-		class="w-1.5 cursor-col-resize bg-gray-200 dark:bg-gray-700 hover:bg-orange-400 dark:hover:bg-orange-600 transition-colors flex-shrink-0 {dragging ? 'bg-orange-500' : ''}"
+		class="w-1.5 h-full cursor-col-resize bg-gray-200 dark:bg-gray-700 hover:bg-orange-400 dark:hover:bg-orange-600 transition-colors flex-shrink-0 {dragging ? 'bg-orange-500' : ''}"
 		onmousedown={handleMouseDown}
 		aria-label="Resize panels"
 	></button>
-	<div class="flex-1 min-w-0">
+	<div class="flex-1 min-w-0 h-full">
 		{@render right()}
 	</div>
 </div>

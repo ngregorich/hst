@@ -34,7 +34,7 @@
 	{#snippet commentNode(comment: Comment, depth: number)}
 		<div
 			id="comment-{comment.id}"
-			class="border-l-2 pl-3 py-2 {selectedId === comment.id ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20' : 'border-gray-200 dark:border-gray-700'}"
+			class="border-l-2 pl-3 py-2 {selectedId === comment.id ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20' : 'border-gray-200 dark:border-gray-700'}"
 			style="margin-left: {depth * 24}px"
 		>
 			<button

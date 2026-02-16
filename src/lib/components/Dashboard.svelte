@@ -5,9 +5,10 @@
 	interface Props {
 		post: HNPost;
 		comments: Comment[];
+		analysisModel: string | null;
 	}
 
-	let { post, comments }: Props = $props();
+	let { post, comments, analysisModel }: Props = $props();
 
 	let stats = $derived.by(() => {
 		const flat = flattenComments(comments);
@@ -64,9 +65,16 @@
 		</p>
 	</div>
 
-	{#if stats.analyzed > 0}
-		<!-- NPS Score -->
-		<div class="flex items-center gap-4">
+		{#if stats.analyzed > 0}
+			<div>
+				<h3 class="text-sm font-medium">Summary</h3>
+				<p class="text-xs text-gray-500 dark:text-gray-400">
+					Computed with {analysisModel || 'unknown model'}
+				</p>
+			</div>
+
+			<!-- NPS Score -->
+			<div class="flex items-center gap-4">
 			<div class="flex-shrink-0">
 				<div class="text-4xl font-bold {npsColor}">{nps > 0 ? '+' : ''}{nps}</div>
 				<div class="text-sm text-gray-500 dark:text-gray-400">Sentiment Score</div>
@@ -91,20 +99,20 @@
 			</div>
 		</div>
 
-		<div class="grid grid-cols-3 gap-4 text-center">
-			<div class="p-3 bg-green-100 dark:bg-green-900/30 rounded">
-				<div class="text-2xl font-bold text-green-700 dark:text-green-400">{pct(stats.promoters)}%</div>
-				<div class="text-sm text-green-600 dark:text-green-500">Promoters ({stats.promoters})</div>
+			<div class="grid grid-cols-3 gap-4 text-center">
+				<div class="p-3 bg-green-100 dark:bg-green-900/30 rounded">
+					<div class="text-2xl font-bold text-green-700 dark:text-green-400">{pct(stats.promoters)}%</div>
+					<div class="text-sm text-green-600 dark:text-green-500">Promoters ({stats.promoters})</div>
+				</div>
+				<div class="p-3 bg-gray-100 dark:bg-gray-800 rounded">
+					<div class="text-2xl font-bold text-gray-700 dark:text-gray-300">{pct(stats.neutrals)}%</div>
+					<div class="text-sm text-gray-600 dark:text-gray-400">Neutral ({stats.neutrals})</div>
+				</div>
+				<div class="p-3 bg-red-100 dark:bg-red-900/30 rounded">
+					<div class="text-2xl font-bold text-red-700 dark:text-red-400">{pct(stats.detractors)}%</div>
+					<div class="text-sm text-red-600 dark:text-red-500">Detractors ({stats.detractors})</div>
+				</div>
 			</div>
-			<div class="p-3 bg-gray-100 dark:bg-gray-800 rounded">
-				<div class="text-2xl font-bold text-gray-700 dark:text-gray-300">{pct(stats.neutrals)}%</div>
-				<div class="text-sm text-gray-600 dark:text-gray-400">Neutral ({stats.neutrals})</div>
-			</div>
-			<div class="p-3 bg-red-100 dark:bg-red-900/30 rounded">
-				<div class="text-2xl font-bold text-red-700 dark:text-red-400">{pct(stats.detractors)}%</div>
-				<div class="text-sm text-red-600 dark:text-red-500">Detractors ({stats.detractors})</div>
-			</div>
-		</div>
 
 		{#if stats.topKeywords.length > 0}
 			<div>
