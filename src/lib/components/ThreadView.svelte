@@ -12,9 +12,10 @@
 		showTime?: boolean;
 		analyzing?: boolean;
 		onSelect: (id: number) => void;
+		onKeywordClick?: (keyword: string) => void;
 	}
 
-	let { comments, selectedId, showCommentText = true, showSummary = true, showKeywords = true, showSentiment = true, showAuthor = true, showTime = true, analyzing = false, onSelect }: Props = $props();
+	let { comments, selectedId, showCommentText = true, showSummary = true, showKeywords = true, showSentiment = true, showAuthor = true, showTime = true, analyzing = false, onSelect, onKeywordClick }: Props = $props();
 
 	function sentimentBadge(sentiment?: string): { text: string; class: string } {
 		switch (sentiment) {
@@ -49,9 +50,17 @@
 			class="border-l-2 pl-3 py-2 {selectedId === comment.id ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20' : 'border-gray-200 dark:border-gray-700'}"
 			style="margin-left: {depth * 24}px"
 		>
-			<button
+			<div
 				class="w-full text-left"
+				role="button"
+				tabindex="0"
 				onclick={() => onSelect(comment.id)}
+				onkeydown={(e) => {
+					if (e.key === 'Enter' || e.key === ' ') {
+						e.preventDefault();
+						onSelect(comment.id);
+					}
+				}}
 			>
 				<div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
 					{#if showAuthor}
@@ -99,7 +108,14 @@
 						{#if comment.analysis?.keywords && comment.analysis.keywords.length > 0}
 							<div class="inline-flex flex-wrap gap-1 ml-1">
 								{#each comment.analysis.keywords as kw}
-									<span class="px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-xs">{kw}</span>
+									<button
+										type="button"
+										class="px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-xs hover:bg-orange-100 dark:hover:bg-orange-900/40"
+										onclick={(e) => {
+											e.stopPropagation();
+											onKeywordClick?.(kw);
+										}}
+									>{kw}</button>
 								{/each}
 							</div>
 						{:else}
@@ -107,7 +123,7 @@
 						{/if}
 					</div>
 				{/if}
-			</button>
+			</div>
 		</div>
 
 		{#each comment.children as child}

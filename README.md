@@ -1,8 +1,8 @@
-# HN Sentiment
+# HN Sentiment Tool (HST)
 
 Sentiment analysis tool for Hacker News threads. Analyze comment sentiment, extract keywords, and visualize discussion patterns.
 
-**Live:** [hnsentiment.experimentarea.com](https://hnsentiment.experimentarea.com)
+**Live:** [hst.experimentarea.com](https://hst.experimentarea.com)
 
 ## Features
 

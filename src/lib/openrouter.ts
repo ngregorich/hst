@@ -1,4 +1,5 @@
 import type { Comment, CommentAnalysis, Sentiment, HNPost } from './schema';
+import { DEFAULT_ANALYSIS_PROMPT_TEMPLATE, DEFAULT_QUESTION_PROMPT_TEMPLATE, renderPromptTemplate } from './prompts';
 
 const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -6,34 +7,35 @@ export async function generateSentimentQuestion(
 	apiKey: string,
 	model: string,
 	post: HNPost,
-	comments?: Comment[]
+	comments?: Comment[],
+	questionPromptTemplate?: string
 ): Promise<string> {
 	// Get top 3 parent comments for context
 	const topComments = comments?.slice(0, 3).map(c => c.text?.slice(0, 300)).filter(Boolean) || [];
-	const commentsContext = topComments.length > 0
+	const topCommentsSection = topComments.length > 0
 		? `\n\nTop comments for context:\n${topComments.map((c, i) => `${i + 1}. "${c}${c && c.length >= 300 ? '...' : ''}"`).join('\n')}`
 		: '';
 
-	const prompt = `Given this Hacker News post title and context, generate a clear statement that commenters might agree or disagree with. The statement should capture the main claim or topic being discussed.
-
-Title: ${post.title}
-${post.text ? `Body: ${post.text}` : ''}
-${post.url ? `URL: ${post.url}` : ''}${commentsContext}
-
-Respond with ONLY the statement, no quotes, no explanation. Make it a declarative statement that can be evaluated as agree/disagree.
-
-Examples of good statements:
-- "Remote work is more productive than office work"
-- "This new JavaScript framework solves real problems"
-- "The author's approach to database design is sound"`;
+	const prompt = renderPromptTemplate(
+		questionPromptTemplate?.trim() || DEFAULT_QUESTION_PROMPT_TEMPLATE,
+		{
+			title: post.title,
+			body: post.text || '',
+			url: post.url || '',
+			body_section: post.text ? `Body: ${post.text}\n` : '',
+			url_section: post.url ? `URL: ${post.url}\n` : '',
+			top_comments: topCommentsSection,
+			top_comments_section: topCommentsSection
+		}
+	);
 
 	const res = await fetch(API_URL, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 			Authorization: `Bearer ${apiKey}`,
-			'HTTP-Referer': globalThis.location?.origin || 'https://hnsentiment.experimentarea.com',
-			'X-Title': 'HN Sentiment'
+			'HTTP-Referer': globalThis.location?.origin || 'https://hst.experimentarea.com',
+			'X-Title': 'HN Sentiment Tool (HST)'
 		},
 		body: JSON.stringify({
 			model,
@@ -80,28 +82,14 @@ interface AnalysisResult {
 	keywords: string[];
 }
 
-function buildPrompt(sentimentQuestion: string, commentText: string): string {
-	return `Analyze this Hacker News comment for sentiment regarding: "${sentimentQuestion}"
-
-Comment:
-"""
-${commentText}
-"""
-
-Respond with JSON only, no markdown:
-{
-  "sentiment": "promoter" | "neutral" | "detractor",
-  "npsScore": 0-10 integer,
-  "summary": "1-2 sentence summary of the comment's main point",
-  "keywords": []
-}
-
-Guidelines:
-- sentiment: promoter (agrees/supports), neutral (neither/off-topic), detractor (disagrees/opposes)
-- npsScore: integer 0-10 reflecting sentiment intensity about the statement
-  - 9-10 = promoter, 7-8 = neutral, 0-6 = detractor
-- summary: Brief factual summary of the main point
-- keywords: 0-5 unique key phrases that provide insight into the commenter's perspective. Only include meaningful phrases, not generic words.`;
+function buildPrompt(sentimentQuestion: string, commentText: string, analysisPromptTemplate?: string): string {
+	return renderPromptTemplate(
+		analysisPromptTemplate?.trim() || DEFAULT_ANALYSIS_PROMPT_TEMPLATE,
+		{
+			sentiment_question: sentimentQuestion,
+			comment_text: commentText
+		}
+	);
 }
 
 function fallbackNps(sentiment: Sentiment): number {
@@ -139,7 +127,8 @@ export async function analyzeComment(
 	model: string,
 	sentimentQuestion: string,
 	comment: Comment,
-	signal?: AbortSignal
+	signal?: AbortSignal,
+	analysisPromptTemplate?: string
 ): Promise<CommentAnalysis | null> {
 	if (!comment.text || comment.deleted || comment.dead) return null;
 
@@ -148,12 +137,12 @@ export async function analyzeComment(
 		headers: {
 			'Content-Type': 'application/json',
 			Authorization: `Bearer ${apiKey}`,
-			'HTTP-Referer': globalThis.location?.origin || 'https://hnsentiment.experimentarea.com',
-			'X-Title': 'HN Sentiment'
+			'HTTP-Referer': globalThis.location?.origin || 'https://hst.experimentarea.com',
+			'X-Title': 'HN Sentiment Tool (HST)'
 		},
 		body: JSON.stringify({
 			model,
-			messages: [{ role: 'user', content: buildPrompt(sentimentQuestion, comment.text) }],
+			messages: [{ role: 'user', content: buildPrompt(sentimentQuestion, comment.text, analysisPromptTemplate) }],
 			temperature: 0.3
 		}),
 		signal
@@ -180,7 +169,8 @@ export async function analyzeCommentsBatch(
 	comments: Comment[],
 	_batchSize: number, // deprecated, kept for API compat
 	onProgress: (done: number, total: number) => void,
-	signal?: AbortSignal
+	signal?: AbortSignal,
+	analysisPromptTemplate?: string
 ): Promise<void> {
 	const total = countComments(comments);
 	let done = 0;
@@ -190,7 +180,7 @@ export async function analyzeCommentsBatch(
 		if (signal?.aborted) return;
 		if (comment.text && !comment.deleted && !comment.dead) {
 			try {
-				const analysis = await analyzeComment(apiKey, model, sentimentQuestion, comment, signal);
+				const analysis = await analyzeComment(apiKey, model, sentimentQuestion, comment, signal, analysisPromptTemplate);
 				if (analysis) comment.analysis = analysis;
 			} catch (e) {
 				if (e instanceof Error && e.name === 'AbortError') throw e;

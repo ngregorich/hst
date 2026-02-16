@@ -39,6 +39,7 @@
 	let sentimentQuestion = $state('');
 	let selectedId = $state<number | null>(null);
 	let activeTab = $state<'analysis' | 'keywords'>('analysis');
+	let highlightedKeyword = $state<string | null>(null);
 
 	// Loading states
 	let loadingPost = $state(false);
@@ -200,7 +201,8 @@
 				(done, total) => {
 					analyzeProgress = { done, total };
 				},
-				abortController.signal
+				abortController.signal,
+				prefs.analysisPromptTemplate
 			);
 
 			// Track what settings were used
@@ -286,6 +288,11 @@
 		return tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable;
 	}
 
+	function jumpToKeyword(keyword: string) {
+		highlightedKeyword = keyword.toLowerCase();
+		activeTab = 'keywords';
+	}
+
 	function handleGlobalKeydown(e: KeyboardEvent) {
 		if (activeTab !== 'analysis' || displayedComments.length === 0 || isTypingTarget(e.target)) return;
 
@@ -337,7 +344,13 @@
 		error = '';
 		generatingQuestion = true;
 		try {
-			sentimentQuestion = await generateAIQuestion(prefs.apiKey, prefs.model, post, comments);
+			sentimentQuestion = await generateAIQuestion(
+				prefs.apiKey,
+				prefs.model,
+				post,
+				comments,
+				prefs.questionPromptTemplate
+			);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to generate question';
 		} finally {
@@ -351,6 +364,8 @@
 		bind:postInput
 		bind:apiKey={prefs.apiKey}
 		bind:model={prefs.model}
+		bind:questionPromptTemplate={prefs.questionPromptTemplate}
+		bind:analysisPromptTemplate={prefs.analysisPromptTemplate}
 		onLoad={loadPost}
 		loading={loadingPost}
 	/>
@@ -407,43 +422,44 @@
 				</button>
 			</div>
 
-			{#if tokenEstimate}
-				<div class="text-sm text-gray-600 dark:text-gray-400">
-					Estimated: {formatTokens(tokenEstimate.totalTokens)} tokens ({tokenEstimate.commentCount} comments) &middot; {formatCost(tokenEstimate.estimatedCost)}
-				</div>
-			{/if}
-
-			<div class="flex gap-2 flex-wrap items-center">
-				<button
-					onclick={runAnalysis}
-					disabled={analyzing || !prefs.apiKey}
-					class="px-4 py-2 text-white rounded disabled:cursor-not-allowed transition-colors {hasAnalysis && !analysisStale ? 'bg-orange-400 hover:bg-orange-500' : 'bg-orange-600 hover:bg-orange-700'} {!prefs.apiKey ? 'opacity-50' : ''}"
-					title={hasAnalysis && !analysisStale ? 'Analysis up to date (change model or question to re-run)' : ''}
-				>
-					{analyzing ? 'Analyzing...' : hasAnalysis && !analysisStale ? 'Re-run Analysis' : 'Run Analysis'}
-				</button>
-				{#if analyzing}
+			<div class="space-y-2">
+				<div class="flex gap-2 flex-wrap items-center">
 					<button
-						onclick={stopAnalysis}
-						class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+						onclick={runAnalysis}
+						disabled={analyzing || !prefs.apiKey}
+						class="px-4 py-2 text-white rounded disabled:cursor-not-allowed transition-colors {hasAnalysis && !analysisStale ? 'bg-orange-400 hover:bg-orange-500' : 'bg-orange-600 hover:bg-orange-700'} {!prefs.apiKey ? 'opacity-50' : ''}"
+						title={hasAnalysis && !analysisStale ? 'Analysis up to date (change model or question to re-run)' : ''}
 					>
-						Stop
+						{analyzing ? 'Analyzing...' : hasAnalysis && !analysisStale ? 'Re-run Analysis' : 'Run Analysis'}
 					</button>
-				{/if}
-				<button
-					onclick={handleExport}
-					class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
-				>
-					Export JSON
-				</button>
-				<label class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
-					Import JSON
-					<input type="file" accept=".json" class="hidden" onchange={handleImport} />
-				</label>
+					{#if analyzing}
+						<button
+							onclick={stopAnalysis}
+							class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+						>
+							Stop
+						</button>
+					{/if}
+					<button
+						onclick={handleExport}
+						class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+					>
+						Export JSON
+					</button>
+					<label class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer">
+						Import JSON
+						<input type="file" accept=".json" class="hidden" onchange={handleImport} />
+					</label>
+					{#if tokenEstimate}
+						<span class="text-sm text-gray-600 dark:text-gray-400">
+							Estimated: {formatTokens(tokenEstimate.totalTokens)} tokens ({tokenEstimate.commentCount} comments) &middot; {formatCost(tokenEstimate.estimatedCost)}
+						</span>
+					{/if}
+				</div>
 				{#if lastAnalysisModel}
-					<span class="text-xs text-gray-500 dark:text-gray-400">
+					<div class="text-xs text-gray-500 dark:text-gray-400">
 						Last run: {lastAnalysisModel}
-					</span>
+					</div>
 				{/if}
 			</div>
 		</div>
@@ -542,13 +558,14 @@
 									showKeywords={prefs.showKeywords}
 									showSentiment={prefs.showSentiment}
 									onSelect={selectComment}
+									onKeywordClick={jumpToKeyword}
 								/>
 							</div>
 						{/snippet}
 					</SplitPane>
 				</div>
 			{:else}
-				<KeywordsTable {comments} />
+				<KeywordsTable {comments} {highlightedKeyword} />
 			{/if}
 	{/if}
 </div>

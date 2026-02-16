@@ -4,9 +4,10 @@
 
 	interface Props {
 		comments: Comment[];
+		highlightedKeyword?: string | null;
 	}
 
-	let { comments }: Props = $props();
+	let { comments, highlightedKeyword = null }: Props = $props();
 
 	let disabledKeywords = $state(new Set<string>());
 	let sortBy = $state<'keyword' | 'total' | 'promoter' | 'neutral' | 'detractor'>('total');
@@ -71,6 +72,18 @@
 		}
 		disabledKeywords = new Set(disabledKeywords);
 	}
+
+	function keywordElementId(kw: string): string {
+		return `keyword-${encodeURIComponent(kw)}`;
+	}
+
+	$effect(() => {
+		if (!highlightedKeyword) return;
+		requestAnimationFrame(() => {
+			const el = document.getElementById(keywordElementId(highlightedKeyword));
+			el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+		});
+	});
 </script>
 
 <div class="space-y-6">
@@ -108,7 +121,10 @@
 			</thead>
 			<tbody>
 				{#each sortedEnabled as stat}
-					<tr class="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+					<tr
+						id={keywordElementId(stat.keyword)}
+						class="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 {highlightedKeyword === stat.keyword ? 'bg-yellow-100 dark:bg-yellow-900/30 ring-1 ring-yellow-400' : ''}"
+					>
 						<td class="py-2 px-2">{stat.keyword}</td>
 						<td class="text-right py-2 px-2">{stat.total}</td>
 						<td class="text-right py-2 px-2 text-green-600 dark:text-green-400">{stat.promoter}</td>
@@ -135,8 +151,9 @@
 			<div class="flex flex-wrap gap-2">
 				{#each sortedDisabled as stat}
 					<button
+						id={keywordElementId(stat.keyword)}
 						onclick={() => toggleKeyword(stat.keyword)}
-						class="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-sm hover:bg-gray-200 dark:hover:bg-gray-700"
+						class="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-sm hover:bg-gray-200 dark:hover:bg-gray-700 {highlightedKeyword === stat.keyword ? 'ring-1 ring-yellow-400 bg-yellow-100 dark:bg-yellow-900/30' : ''}"
 					>
 						{stat.keyword} ({stat.total}) +
 					</button>

@@ -1,5 +1,6 @@
 import { get, set, del, keys } from 'idb-keyval';
 import type { AnalysisExport, Comment, HNPost } from './schema';
+import { DEFAULT_ANALYSIS_PROMPT_TEMPLATE, DEFAULT_QUESTION_PROMPT_TEMPLATE } from './prompts';
 
 const STORAGE_KEY_PREFIX = 'hn-analysis-';
 const CACHE_KEY_PREFIX = 'hn-cache-';
@@ -45,6 +46,8 @@ export interface Preferences {
 	showCommentText: boolean;
 	showAuthor: boolean;
 	showTime: boolean;
+	questionPromptTemplate: string;
+	analysisPromptTemplate: string;
 }
 
 const defaultPrefs: Preferences = {
@@ -57,7 +60,9 @@ const defaultPrefs: Preferences = {
 	showSentiment: true,
 	showCommentText: true,
 	showAuthor: true,
-	showTime: true
+	showTime: true,
+	questionPromptTemplate: DEFAULT_QUESTION_PROMPT_TEMPLATE,
+	analysisPromptTemplate: DEFAULT_ANALYSIS_PROMPT_TEMPLATE
 };
 
 // Preferences use localStorage (small, sync access needed)
