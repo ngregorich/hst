@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parsePostId, generateSentimentQuestion, flattenComments } from './hn';
+import { parsePostId, generateSentimentQuestion, flattenComments, sortCommentsTree } from './hn';
 import type { Comment } from './schema';
 
 describe('parsePostId', () => {
@@ -46,5 +46,49 @@ describe('flattenComments', () => {
 		];
 		const flat = flattenComments(comments);
 		expect(flat.map(c => c.id)).toEqual([1, 2, 3]);
+	});
+});
+
+describe('sortCommentsTree', () => {
+	const base: Comment[] = [
+		{
+			id: 1,
+			parentId: null,
+			author: 'a',
+			time: 20,
+			text: 'a',
+			analysis: { sentiment: 'neutral', npsScore: 7, summary: '', keywords: [] },
+			children: [
+				{ id: 2, parentId: 1, author: 'b', time: 30, text: 'b', analysis: { sentiment: 'promoter', npsScore: 10, summary: '', keywords: [] }, children: [] },
+				{ id: 3, parentId: 1, author: 'c', time: 10, text: 'c', analysis: { sentiment: 'detractor', npsScore: 2, summary: '', keywords: [] }, children: [] }
+			]
+		},
+		{
+			id: 4,
+			parentId: null,
+			author: 'd',
+			time: 5,
+			text: 'd',
+			analysis: { sentiment: 'promoter', npsScore: 9, summary: '', keywords: [] },
+			children: []
+		}
+	];
+
+	it('keeps order in default mode', () => {
+		const sorted = sortCommentsTree(base, 'default');
+		expect(sorted.map((c) => c.id)).toEqual([1, 4]);
+		expect(sorted[0].children.map((c) => c.id)).toEqual([2, 3]);
+	});
+
+	it('sorts by time descending recursively', () => {
+		const sorted = sortCommentsTree(base, 'time-desc');
+		expect(sorted.map((c) => c.id)).toEqual([1, 4]);
+		expect(sorted[0].children.map((c) => c.id)).toEqual([2, 3]);
+	});
+
+	it('sorts by sentiment ascending recursively using score', () => {
+		const sorted = sortCommentsTree(base, 'sentiment-asc');
+		expect(sorted.map((c) => c.id)).toEqual([1, 4]);
+		expect(sorted[0].children.map((c) => c.id)).toEqual([3, 2]);
 	});
 });

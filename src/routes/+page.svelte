@@ -9,7 +9,7 @@
 	import ThreadView from '$lib/components/ThreadView.svelte';
 	import KeywordsTable from '$lib/components/KeywordsTable.svelte';
 	import SplitPane from '$lib/components/SplitPane.svelte';
-	import { parsePostId, fetchPost, fetchComments, flattenComments, generateSentimentQuestion as generateBasicQuestion } from '$lib/hn';
+	import { parsePostId, fetchPost, fetchComments, flattenComments, sortCommentsTree, generateSentimentQuestion as generateBasicQuestion } from '$lib/hn';
 	import { analyzeCommentsBatch, generateSentimentQuestion as generateAIQuestion } from '$lib/openrouter';
 	import { loadPrefs, savePrefs, saveAnalysis, loadAnalysis, loadAnyAnalysis, exportToFile, importFromFile, cacheHNData, getCachedHNData, type Preferences } from '$lib/storage';
 	import { estimateTokens, formatCost, formatTokens } from '$lib/tokens';
@@ -61,8 +61,9 @@
 	let hasAnalysis = $derived(
 		comments.some(c => c.analysis || c.children.some(cc => cc.analysis))
 	);
+	let displayedComments = $derived(sortCommentsTree(comments, prefs.sortMode));
 	let navIndex = $derived.by(() => {
-		const flat = flattenComments(comments);
+		const flat = flattenComments(displayedComments);
 		const flatIds = flat.map((c) => c.id);
 		const positionById = new Map<number, number>();
 		const childrenById = new Map<number, number[]>();
@@ -104,7 +105,7 @@
 			return;
 		}
 		if (selectedId === null || !navIndex.positionById.has(selectedId)) {
-			selectComment(comments[0].id);
+			selectComment(displayedComments[0].id);
 		}
 	});
 
@@ -286,7 +287,7 @@
 	}
 
 	function handleGlobalKeydown(e: KeyboardEvent) {
-		if (activeTab !== 'analysis' || comments.length === 0 || isTypingTarget(e.target)) return;
+		if (activeTab !== 'analysis' || displayedComments.length === 0 || isTypingTarget(e.target)) return;
 
 		const firstId = navIndex.flatIds[0];
 		if (selectedId === null) {
@@ -471,7 +472,20 @@
 
 		<!-- Display toggles -->
 		{#if activeTab === 'analysis'}
-			<div class="flex gap-4 text-sm flex-wrap">
+			<div class="flex gap-4 text-sm flex-wrap items-center">
+				<label class="flex items-center gap-2">
+					<span>Sort</span>
+					<select
+						bind:value={prefs.sortMode}
+						class="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-sm"
+					>
+						<option value="default">Default (HN)</option>
+						<option value="time-asc">Time (Oldest first)</option>
+						<option value="time-desc">Time (Newest first)</option>
+						<option value="sentiment-asc">Sentiment (Low to high)</option>
+						<option value="sentiment-desc">Sentiment (High to low)</option>
+					</select>
+				</label>
 				<label class="flex items-center gap-2">
 					<input type="checkbox" bind:checked={prefs.showCommentText} class="rounded" />
 					Comment
@@ -512,13 +526,13 @@
 									<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm detractor-legend inline-block"></span>Detractor</span>
 									<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-gray-200 dark:bg-gray-700 border border-gray-400 dark:border-gray-500 inline-block"></span>Not analyzed</span>
 								</div>
-								<TreeView {comments} {selectedId} onSelect={selectComment} />
+								<TreeView comments={displayedComments} {selectedId} onSelect={selectComment} />
 							</div>
 						{/snippet}
 						{#snippet right()}
 							<div class="h-full pl-2 overflow-auto">
 								<ThreadView
-									{comments}
+									comments={displayedComments}
 									{selectedId}
 									{analyzing}
 									showCommentText={prefs.showCommentText}

@@ -90,26 +90,61 @@ export async function fetchComments(
 		});
 	}
 
-	// Link children to parents
-	const roots: Comment[] = [];
-	for (const comment of itemMap.values()) {
-		if (comment.parentId === null) {
-			roots.push(comment);
-		} else {
-			const parent = itemMap.get(comment.parentId);
-			if (parent) parent.children.push(comment);
-		}
+	// Link children preserving HN's default order from each item's kids[] array.
+	for (const [id, comment] of itemMap) {
+		const item = cache.get(id);
+		if (!item?.kids || item.kids.length === 0) continue;
+		comment.children = item.kids
+			.map((kidId) => itemMap.get(kidId))
+			.filter((child): child is Comment => Boolean(child));
 	}
 
-	// Sort by time
-	const sortByTime = (a: Comment, b: Comment) => a.time - b.time;
-	const sortTree = (comments: Comment[]) => {
-		comments.sort(sortByTime);
-		for (const c of comments) sortTree(c.children);
-	};
-	sortTree(roots);
+	const roots = (post.kids || [])
+		.map((kidId) => itemMap.get(kidId))
+		.filter((comment): comment is Comment => Boolean(comment));
 
 	return roots;
+}
+
+export type CommentSortMode = 'default' | 'time-asc' | 'time-desc' | 'sentiment-asc' | 'sentiment-desc';
+
+function sentimentScore(c: Comment): number {
+	if (typeof c.analysis?.npsScore === 'number') return c.analysis.npsScore;
+	switch (c.analysis?.sentiment) {
+		case 'promoter': return 9;
+		case 'neutral': return 7;
+		case 'detractor': return 3;
+		default: return 5;
+	}
+}
+
+export function sortCommentsTree(comments: Comment[], mode: CommentSortMode): Comment[] {
+	const cloneAndSort = (list: Comment[]): Comment[] => {
+		const cloned = list.map((c) => ({
+			...c,
+			children: cloneAndSort(c.children)
+		}));
+		switch (mode) {
+			case 'time-asc':
+				cloned.sort((a, b) => a.time - b.time);
+				break;
+			case 'time-desc':
+				cloned.sort((a, b) => b.time - a.time);
+				break;
+			case 'sentiment-asc':
+				cloned.sort((a, b) => sentimentScore(a) - sentimentScore(b));
+				break;
+			case 'sentiment-desc':
+				cloned.sort((a, b) => sentimentScore(b) - sentimentScore(a));
+				break;
+			case 'default':
+			default:
+				break;
+		}
+		return cloned;
+	};
+
+	return cloneAndSort(comments);
 }
 
 export function flattenComments(comments: Comment[]): Comment[] {

@@ -4,6 +4,7 @@ export type Sentiment = 'promoter' | 'neutral' | 'detractor';
 
 export interface CommentAnalysis {
 	sentiment: Sentiment;
+	npsScore?: number; // 0-10, where 9-10 promoter, 7-8 neutral, 0-6 detractor
 	summary: string;
 	keywords: string[];
 }

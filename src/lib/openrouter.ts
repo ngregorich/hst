@@ -75,6 +75,7 @@ Examples of good statements:
 
 interface AnalysisResult {
 	sentiment: Sentiment;
+	npsScore: number;
 	summary: string;
 	keywords: string[];
 }
@@ -90,14 +91,25 @@ ${commentText}
 Respond with JSON only, no markdown:
 {
   "sentiment": "promoter" | "neutral" | "detractor",
+  "npsScore": 0-10 integer,
   "summary": "1-2 sentence summary of the comment's main point",
   "keywords": []
 }
 
 Guidelines:
 - sentiment: promoter (agrees/supports), neutral (neither/off-topic), detractor (disagrees/opposes)
+- npsScore: integer 0-10 reflecting sentiment intensity about the statement
+  - 9-10 = promoter, 7-8 = neutral, 0-6 = detractor
 - summary: Brief factual summary of the main point
 - keywords: 0-5 unique key phrases that provide insight into the commenter's perspective. Only include meaningful phrases, not generic words.`;
+}
+
+function fallbackNps(sentiment: Sentiment): number {
+	switch (sentiment) {
+		case 'promoter': return 9;
+		case 'neutral': return 7;
+		case 'detractor': return 3;
+	}
 }
 
 function parseResponse(content: string): AnalysisResult | null {
@@ -106,8 +118,14 @@ function parseResponse(content: string): AnalysisResult | null {
 		const cleaned = content.replace(/```json\n?|\n?```/g, '').trim();
 		const parsed = JSON.parse(cleaned);
 		if (!['promoter', 'neutral', 'detractor'].includes(parsed.sentiment)) return null;
+		const sentiment = parsed.sentiment as Sentiment;
+		const parsedNps = Number(parsed.npsScore);
+		const npsScore = Number.isFinite(parsedNps)
+			? Math.max(0, Math.min(10, Math.round(parsedNps)))
+			: fallbackNps(sentiment);
 		return {
-			sentiment: parsed.sentiment,
+			sentiment,
+			npsScore,
 			summary: String(parsed.summary || ''),
 			keywords: Array.isArray(parsed.keywords) ? parsed.keywords.slice(0, 5).map(String) : []
 		};

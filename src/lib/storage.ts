@@ -38,6 +38,7 @@ export interface Preferences {
 	theme: 'light' | 'dark' | 'system';
 	apiKey: string;
 	model: string;
+	sortMode: 'default' | 'time-asc' | 'time-desc' | 'sentiment-asc' | 'sentiment-desc';
 	showSummary: boolean;
 	showKeywords: boolean;
 	showSentiment: boolean;
@@ -50,6 +51,7 @@ const defaultPrefs: Preferences = {
 	theme: 'system',
 	apiKey: '',
 	model: 'openai/gpt-4o-mini',
+	sortMode: 'default',
 	showSummary: true,
 	showKeywords: true,
 	showSentiment: true,

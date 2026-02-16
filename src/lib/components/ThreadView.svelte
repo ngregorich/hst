@@ -28,6 +28,18 @@
 	function formatTime(unix: number): string {
 		return new Date(unix * 1000).toLocaleString();
 	}
+
+	function commentNps(comment: Comment): number {
+		if (typeof comment.analysis?.npsScore === 'number') {
+			return Math.max(0, Math.min(10, Math.round(comment.analysis.npsScore)));
+		}
+		switch (comment.analysis?.sentiment) {
+			case 'promoter': return 9;
+			case 'neutral': return 7;
+			case 'detractor': return 3;
+			default: return 5;
+		}
+	}
 </script>
 
 <div class="space-y-4">
@@ -50,7 +62,7 @@
 					{/if}
 					{#if showSentiment && comment.analysis}
 						{@const badge = sentimentBadge(comment.analysis.sentiment)}
-						<span class="px-2 py-0.5 rounded text-xs {badge.class}">{badge.text}</span>
+						<span class="px-2 py-0.5 rounded text-xs {badge.class}">{badge.text} · NPS {commentNps(comment)}</span>
 					{/if}
 				</div>
 
