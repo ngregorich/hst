@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { MODELS, DEFAULT_MODEL } from '$lib/schema';
+	import { MODELS } from '$lib/schema';
 
 	interface Props {
 		postInput: string;
@@ -10,6 +10,27 @@
 	}
 
 	let { postInput = $bindable(), apiKey = $bindable(), model = $bindable(), onLoad, loading = false }: Props = $props();
+
+	let useCustomModel = $state(false);
+	let customModel = $state('');
+
+	// Sync model value with custom input
+	$effect(() => {
+		if (useCustomModel && customModel) {
+			model = customModel;
+		}
+	});
+
+	function handleModelChange(e: Event) {
+		const value = (e.target as HTMLSelectElement).value;
+		if (value === '__custom__') {
+			useCustomModel = true;
+			customModel = model;
+		} else {
+			useCustomModel = false;
+			model = value;
+		}
+	}
 </script>
 
 <div class="space-y-4 max-w-2xl">
@@ -44,6 +65,7 @@
 			>
 				Get one
 			</a>
+			<span class="text-gray-400 text-xs ml-2">(stored locally, no backend)</span>
 		</label>
 		<input
 			id="api-key"
@@ -56,17 +78,33 @@
 
 	<div>
 		<label for="model" class="block text-sm font-medium mb-1">Model</label>
-		<input
-			id="model"
-			list="models"
-			bind:value={model}
-			placeholder="Select or type model ID"
-			class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-500"
-		/>
-		<datalist id="models">
-			{#each MODELS as m}
-				<option value={m}></option>
-			{/each}
-		</datalist>
+		{#if useCustomModel}
+			<div class="flex gap-2">
+				<input
+					type="text"
+					bind:value={customModel}
+					placeholder="e.g., anthropic/claude-3-opus"
+					class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-500"
+				/>
+				<button
+					onclick={() => { useCustomModel = false; model = MODELS[0]; }}
+					class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+				>
+					Cancel
+				</button>
+			</div>
+		{:else}
+			<select
+				id="model"
+				value={model}
+				onchange={handleModelChange}
+				class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-500"
+			>
+				{#each MODELS as m}
+					<option value={m}>{m}</option>
+				{/each}
+				<option value="__custom__">Custom model...</option>
+			</select>
+		{/if}
 	</div>
 </div>

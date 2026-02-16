@@ -2,7 +2,7 @@
 
 Sentiment analysis tool for Hacker News threads. Analyze comment sentiment, extract keywords, and visualize discussion patterns.
 
-**Live:** [hn-sentiment.experimentarea.com](https://hn-sentiment.experimentarea.com)
+**Live:** [hnsentiment.experimentarea.com](https://hnsentiment.experimentarea.com)
 
 ## Features
 

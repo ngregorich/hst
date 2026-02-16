@@ -16,8 +16,9 @@ const PRICING: Record<string, { input: number; output: number }> = {
 	'anthropic/claude-sonnet-4.5': { input: 3, output: 15 },
 	'deepseek/deepseek-v3.2': { input: 0.5, output: 2 },
 	'google/gemini-3-flash-preview': { input: 0.1, output: 0.4 },
-	'openai/gpt-5-mini': { input: 0.5, output: 2 },
-	'openai/gpt-5.2': { input: 2, output: 10 },
+	'openai/gpt-4o-mini': { input: 0.15, output: 0.6 },
+	'openai/gpt-5-mini': { input: 0.25, output: 2 },
+	'openai/gpt-5.2': { input: 1.75, output: 14 },
 	'x-ai/grok-4.1-fast': { input: 1, output: 4 }
 };
 

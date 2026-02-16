@@ -56,9 +56,10 @@ export const MODELS = [
 	'anthropic/claude-sonnet-4.5',
 	'deepseek/deepseek-v3.2',
 	'google/gemini-3-flash-preview',
+	'openai/gpt-4o-mini',
 	'openai/gpt-5-mini',
 	'openai/gpt-5.2',
 	'x-ai/grok-4.1-fast'
 ] as const;
 
-export const DEFAULT_MODEL = 'openai/gpt-5-mini';
+export const DEFAULT_MODEL = 'openai/gpt-4o-mini';

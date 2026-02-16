@@ -8,9 +8,10 @@
 	import TreeView from '$lib/components/TreeView.svelte';
 	import ThreadView from '$lib/components/ThreadView.svelte';
 	import KeywordsTable from '$lib/components/KeywordsTable.svelte';
-	import { parsePostId, fetchPost, fetchComments, generateSentimentQuestion } from '$lib/hn';
-	import { analyzeCommentsBatch } from '$lib/openrouter';
-	import { loadPrefs, savePrefs, saveAnalysis, loadAnalysis, exportToFile, importFromFile, type Preferences } from '$lib/storage';
+	import SplitPane from '$lib/components/SplitPane.svelte';
+	import { parsePostId, fetchPost, fetchComments, generateSentimentQuestion as generateBasicQuestion } from '$lib/hn';
+	import { analyzeCommentsBatch, generateSentimentQuestion as generateAIQuestion } from '$lib/openrouter';
+	import { loadPrefs, savePrefs, saveAnalysis, loadAnalysis, loadAnyAnalysis, exportToFile, importFromFile, cacheHNData, getCachedHNData, type Preferences } from '$lib/storage';
 	import { estimateTokens, formatCost, formatTokens } from '$lib/tokens';
 	import { DEFAULT_MODEL, SCHEMA_VERSION, type Comment, type HNPost, type AnalysisExport } from '$lib/schema';
 
@@ -39,10 +40,25 @@
 
 	// Loading states
 	let loadingPost = $state(false);
-	let fetchProgress = $state<{ done: number; total: number } | null>(null);
+	let discoveredComments = $state<number | null>(null);
 	let analyzing = $state(false);
 	let analyzeProgress = $state<{ done: number; total: number } | null>(null);
+	let generatingQuestion = $state(false);
 	let error = $state('');
+
+	// Analysis tracking
+	let lastAnalysisModel = $state<string | null>(null);
+	let lastAnalysisQuestion = $state<string | null>(null);
+	let abortController = $state<AbortController | null>(null);
+
+	// Derived: check if analysis is stale (settings changed since last run)
+	let analysisStale = $derived(
+		lastAnalysisModel !== null &&
+		(lastAnalysisModel !== prefs.model || lastAnalysisQuestion !== sentimentQuestion)
+	);
+	let hasAnalysis = $derived(
+		comments.some(c => c.analysis || c.children.some(cc => cc.analysis))
+	);
 
 	// Derived
 	let tokenEstimate = $derived(comments.length > 0 ? estimateTokens(comments, prefs.model) : null);
@@ -69,19 +85,36 @@
 			return;
 		}
 
-		// Check for cached analysis first
-		const cached = await loadAnalysis(id);
-		if (cached) {
-			post = cached.post;
-			comments = cached.comments;
-			sentimentQuestion = cached.sentimentQuestion;
-			// Update URL
+		// Check for cached analysis first (has sentiment data)
+		// Try current model first, then any cached analysis
+		let cachedAnalysis = await loadAnalysis(id, prefs.model);
+		if (!cachedAnalysis) {
+			cachedAnalysis = await loadAnyAnalysis(id);
+		}
+		if (cachedAnalysis) {
+			post = cachedAnalysis.post;
+			comments = cachedAnalysis.comments;
+			sentimentQuestion = cachedAnalysis.sentimentQuestion;
+			// Track the model/question that was used for this analysis
+			lastAnalysisModel = cachedAnalysis.model;
+			lastAnalysisQuestion = cachedAnalysis.sentimentQuestion;
+			if (cachedAnalysis.model) prefs.model = cachedAnalysis.model;
+			goto(`?post=${id}`, { replaceState: true });
+			return;
+		}
+
+		// Check for cached HN data (no analysis yet)
+		const cachedHN = await getCachedHNData(id);
+		if (cachedHN) {
+			post = cachedHN.post;
+			comments = cachedHN.comments;
+			sentimentQuestion = generateBasicQuestion(post.title);
 			goto(`?post=${id}`, { replaceState: true });
 			return;
 		}
 
 		loadingPost = true;
-		fetchProgress = { done: 0, total: 0 };
+		discoveredComments = 0;
 
 		try {
 			const fetchedPost = await fetchPost(id);
@@ -90,19 +123,21 @@
 				return;
 			}
 			post = fetchedPost;
-			sentimentQuestion = generateSentimentQuestion(post.title);
+			sentimentQuestion = generateBasicQuestion(post.title);
 
-			comments = await fetchComments(id, (done, total) => {
-				fetchProgress = { done, total };
+			comments = await fetchComments(id, (count) => {
+				discoveredComments = count;
 			});
 
-			// Update URL
+			// Cache fetched data (snapshot to strip Svelte proxies)
+			await cacheHNData(id, $state.snapshot(post), $state.snapshot(comments));
+
 			goto(`?post=${id}`, { replaceState: true });
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load post';
 		} finally {
 			loadingPost = false;
-			fetchProgress = null;
+			discoveredComments = null;
 		}
 	}
 
@@ -116,6 +151,7 @@
 		error = '';
 		analyzing = true;
 		analyzeProgress = { done: 0, total: 0 };
+		abortController = new AbortController();
 
 		try {
 			await analyzeCommentsBatch(
@@ -126,8 +162,13 @@
 				5, // batch size
 				(done, total) => {
 					analyzeProgress = { done, total };
-				}
+				},
+				abortController.signal
 			);
+
+			// Track what settings were used
+			lastAnalysisModel = prefs.model;
+			lastAnalysisQuestion = sentimentQuestion;
 
 			// Save to IndexedDB
 			const exportData = buildExport();
@@ -136,11 +177,20 @@
 				console.warn('Failed to save analysis:', result.error);
 			}
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Analysis failed';
+			if (e instanceof Error && e.name === 'AbortError') {
+				error = 'Analysis stopped';
+			} else {
+				error = e instanceof Error ? e.message : 'Analysis failed';
+			}
 		} finally {
 			analyzing = false;
 			analyzeProgress = null;
+			abortController = null;
 		}
+	}
+
+	function stopAnalysis() {
+		abortController?.abort();
 	}
 
 	function buildExport(): AnalysisExport {
@@ -152,8 +202,8 @@
 			sentimentQuestion,
 			model: prefs.model,
 			analyzedAt: new Date().toISOString(),
-			post: post!,
-			comments
+			post: $state.snapshot(post!),
+			comments: $state.snapshot(comments)
 		};
 	}
 
@@ -186,6 +236,19 @@
 		const el = document.getElementById(`comment-${id}`);
 		el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 	}
+
+	async function generateQuestion() {
+		if (!prefs.apiKey || !post) return;
+		error = '';
+		generatingQuestion = true;
+		try {
+			sentimentQuestion = await generateAIQuestion(prefs.apiKey, prefs.model, post, comments);
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to generate question';
+		} finally {
+			generatingQuestion = false;
+		}
+	}
 </script>
 
 <div class="max-w-7xl mx-auto space-y-6">
@@ -203,8 +266,13 @@
 		</div>
 	{/if}
 
-	{#if fetchProgress}
-		<ProgressBar done={fetchProgress.done} total={fetchProgress.total} label="Fetching comments" />
+	{#if discoveredComments !== null}
+		<div class="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
+			<div class="h-2 w-32 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden">
+				<div class="h-full bg-orange-500 animate-pulse" style="width: 100%"></div>
+			</div>
+			<span>Discovering comments... {discoveredComments} found</span>
+		</div>
 	{/if}
 
 	{#if !post && !loadingPost}
@@ -228,12 +296,20 @@
 		<div class="space-y-4">
 			<div>
 				<label for="sentiment-q" class="block text-sm font-medium mb-1">Sentiment Question</label>
-				<input
+				<textarea
 					id="sentiment-q"
-					type="text"
 					bind:value={sentimentQuestion}
-					class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-500"
-				/>
+					rows="2"
+					class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-orange-500 resize-y min-h-[2.5rem]"
+				></textarea>
+				<button
+					onclick={generateQuestion}
+					disabled={generatingQuestion || !prefs.apiKey}
+					class="mt-2 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+					title={!prefs.apiKey ? 'Enter API key first' : 'Generate a better question using AI'}
+				>
+					{generatingQuestion ? 'Generating...' : 'Generate with AI'}
+				</button>
 			</div>
 
 			{#if tokenEstimate}
@@ -242,14 +318,23 @@
 				</div>
 			{/if}
 
-			<div class="flex gap-2 flex-wrap">
+			<div class="flex gap-2 flex-wrap items-center">
 				<button
 					onclick={runAnalysis}
 					disabled={analyzing || !prefs.apiKey}
-					class="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+					class="px-4 py-2 text-white rounded disabled:cursor-not-allowed transition-colors {hasAnalysis && !analysisStale ? 'bg-orange-400 hover:bg-orange-500' : 'bg-orange-600 hover:bg-orange-700'} {!prefs.apiKey ? 'opacity-50' : ''}"
+					title={hasAnalysis && !analysisStale ? 'Analysis up to date (change model or question to re-run)' : ''}
 				>
-					{analyzing ? 'Analyzing...' : 'Run Analysis'}
+					{analyzing ? 'Analyzing...' : hasAnalysis && !analysisStale ? 'Re-run Analysis' : 'Run Analysis'}
 				</button>
+				{#if analyzing}
+					<button
+						onclick={stopAnalysis}
+						class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+					>
+						Stop
+					</button>
+				{/if}
 				<button
 					onclick={handleExport}
 					class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -260,6 +345,11 @@
 					Import JSON
 					<input type="file" accept=".json" class="hidden" onchange={handleImport} />
 				</label>
+				{#if lastAnalysisModel}
+					<span class="text-xs text-gray-500 dark:text-gray-400">
+						Last run: {lastAnalysisModel}
+					</span>
+				{/if}
 			</div>
 		</div>
 
@@ -287,7 +377,19 @@
 
 		<!-- Display toggles -->
 		{#if activeTab === 'analysis'}
-			<div class="flex gap-4 text-sm">
+			<div class="flex gap-4 text-sm flex-wrap">
+				<label class="flex items-center gap-2">
+					<input type="checkbox" bind:checked={prefs.showCommentText} class="rounded" />
+					Comment
+				</label>
+				<label class="flex items-center gap-2">
+					<input type="checkbox" bind:checked={prefs.showAuthor} class="rounded" />
+					Author
+				</label>
+				<label class="flex items-center gap-2">
+					<input type="checkbox" bind:checked={prefs.showTime} class="rounded" />
+					Time
+				</label>
 				<label class="flex items-center gap-2">
 					<input type="checkbox" bind:checked={prefs.showSentiment} class="rounded" />
 					Sentiment
@@ -304,22 +406,30 @@
 		{/if}
 
 		{#if activeTab === 'analysis'}
-			<div class="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6">
-				<div class="border border-gray-200 dark:border-gray-700 rounded p-4 overflow-auto max-h-[600px]">
-					<h3 class="text-sm font-medium mb-3">Comment Tree</h3>
-					<TreeView {comments} {selectedId} onSelect={selectComment} />
-				</div>
-				<div class="overflow-auto max-h-[600px]">
-					<ThreadView
-						{comments}
-						{selectedId}
-						showSummary={prefs.showSummary}
-						showKeywords={prefs.showKeywords}
-						showSentiment={prefs.showSentiment}
-						onSelect={selectComment}
-					/>
-				</div>
-			</div>
+			<SplitPane initialWidth={200} minWidth={80} maxWidth={400}>
+				{#snippet left()}
+					<div class="border border-gray-200 dark:border-gray-700 rounded p-3 mr-1 overflow-x-auto">
+						<h3 class="text-sm font-medium mb-2">Comment Tree</h3>
+						<TreeView {comments} {selectedId} onSelect={selectComment} />
+					</div>
+				{/snippet}
+				{#snippet right()}
+					<div class="pl-2">
+						<ThreadView
+							{comments}
+							{selectedId}
+							{analyzing}
+							showCommentText={prefs.showCommentText}
+							showAuthor={prefs.showAuthor}
+							showTime={prefs.showTime}
+							showSummary={prefs.showSummary}
+							showKeywords={prefs.showKeywords}
+							showSentiment={prefs.showSentiment}
+							onSelect={selectComment}
+						/>
+					</div>
+				{/snippet}
+			</SplitPane>
 		{:else}
 			<KeywordsTable {comments} />
 		{/if}

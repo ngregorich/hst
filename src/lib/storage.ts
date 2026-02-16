@@ -1,7 +1,37 @@
 import { get, set, del, keys } from 'idb-keyval';
-import type { AnalysisExport } from './schema';
+import type { AnalysisExport, Comment, HNPost } from './schema';
 
 const STORAGE_KEY_PREFIX = 'hn-analysis-';
+const CACHE_KEY_PREFIX = 'hn-cache-';
+
+// Cached HN data (post + comments, no analysis)
+export interface CachedHNData {
+	post: HNPost;
+	comments: Comment[];
+	fetchedAt: string;
+}
+
+export async function cacheHNData(postId: number, post: HNPost, comments: Comment[]): Promise<void> {
+	const key = `${CACHE_KEY_PREFIX}${postId}`;
+	try {
+		await set(key, {
+			post,
+			comments,
+			fetchedAt: new Date().toISOString()
+		});
+	} catch {
+		// ignore cache failures
+	}
+}
+
+export async function getCachedHNData(postId: number): Promise<CachedHNData | null> {
+	const key = `${CACHE_KEY_PREFIX}${postId}`;
+	try {
+		return (await get(key)) || null;
+	} catch {
+		return null;
+	}
+}
 const PREFS_KEY = 'hn-sentiment-prefs';
 
 export interface Preferences {
@@ -11,15 +41,21 @@ export interface Preferences {
 	showSummary: boolean;
 	showKeywords: boolean;
 	showSentiment: boolean;
+	showCommentText: boolean;
+	showAuthor: boolean;
+	showTime: boolean;
 }
 
 const defaultPrefs: Preferences = {
 	theme: 'system',
 	apiKey: '',
-	model: 'openai/gpt-5-mini',
+	model: 'openai/gpt-4o-mini',
 	showSummary: true,
 	showKeywords: true,
-	showSentiment: true
+	showSentiment: true,
+	showCommentText: true,
+	showAuthor: true,
+	showTime: true
 };
 
 // Preferences use localStorage (small, sync access needed)
@@ -42,26 +78,50 @@ export function savePrefs(prefs: Preferences): void {
 }
 
 // Analysis data uses IndexedDB (larger storage)
+// Key format: hn-analysis-{postId}-{model} for per-model caching
+function analysisKey(postId: number, model: string): string {
+	// Sanitize model name for key (replace / with -)
+	const safeModel = model.replace(/\//g, '-');
+	return `${STORAGE_KEY_PREFIX}${postId}-${safeModel}`;
+}
+
 export async function saveAnalysis(data: AnalysisExport): Promise<{ ok: boolean; error?: string }> {
 	try {
-		await set(`${STORAGE_KEY_PREFIX}${data.hnPostId}`, data);
+		await set(analysisKey(data.hnPostId, data.model), data);
 		return { ok: true };
 	} catch (e) {
 		return { ok: false, error: e instanceof Error ? e.message : 'Storage error' };
 	}
 }
 
-export async function loadAnalysis(postId: number): Promise<AnalysisExport | null> {
+export async function loadAnalysis(postId: number, model: string): Promise<AnalysisExport | null> {
 	try {
-		return (await get(`${STORAGE_KEY_PREFIX}${postId}`)) || null;
+		return (await get(analysisKey(postId, model))) || null;
 	} catch {
 		return null;
 	}
 }
 
-export async function deleteAnalysis(postId: number): Promise<void> {
+export async function loadAnyAnalysis(postId: number): Promise<AnalysisExport | null> {
+	// Load any cached analysis for this post (first one found)
 	try {
-		await del(`${STORAGE_KEY_PREFIX}${postId}`);
+		const allKeys = await keys();
+		const prefix = `${STORAGE_KEY_PREFIX}${postId}-`;
+		const matchingKey = allKeys.find((k): k is string =>
+			typeof k === 'string' && k.startsWith(prefix)
+		);
+		if (matchingKey) {
+			return (await get(matchingKey)) || null;
+		}
+		return null;
+	} catch {
+		return null;
+	}
+}
+
+export async function deleteAnalysis(postId: number, model: string): Promise<void> {
+	try {
+		await del(analysisKey(postId, model));
 	} catch {
 		// ignore
 	}

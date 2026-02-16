@@ -56,7 +56,7 @@ export async function fetchPost(id: number): Promise<HNPost | null> {
 
 export async function fetchComments(
 	postId: number,
-	onProgress?: (done: number, total: number) => void
+	onProgress?: (discovered: number) => void
 ): Promise<Comment[]> {
 	const post = await fetchItem(postId);
 	if (!post?.kids) return [];
@@ -64,13 +64,13 @@ export async function fetchComments(
 	const allIds: number[] = [];
 	const queue = [...post.kids];
 
-	// First pass: collect all comment IDs
+	// First pass: collect all comment IDs (total unknown until done)
 	while (queue.length > 0) {
 		const id = queue.shift()!;
 		allIds.push(id);
 		const item = await fetchItem(id);
 		if (item?.kids) queue.push(...item.kids);
-		onProgress?.(allIds.length, allIds.length + queue.length);
+		onProgress?.(allIds.length);
 	}
 
 	// Build tree from cached items

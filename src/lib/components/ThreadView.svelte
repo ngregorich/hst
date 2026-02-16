@@ -4,13 +4,17 @@
 	interface Props {
 		comments: Comment[];
 		selectedId: number | null;
+		showCommentText?: boolean;
 		showSummary?: boolean;
 		showKeywords?: boolean;
 		showSentiment?: boolean;
+		showAuthor?: boolean;
+		showTime?: boolean;
+		analyzing?: boolean;
 		onSelect: (id: number) => void;
 	}
 
-	let { comments, selectedId, showSummary = true, showKeywords = true, showSentiment = true, onSelect }: Props = $props();
+	let { comments, selectedId, showCommentText = true, showSummary = true, showKeywords = true, showSentiment = true, showAuthor = true, showTime = true, analyzing = false, onSelect }: Props = $props();
 
 	function sentimentBadge(sentiment?: string): { text: string; class: string } {
 		switch (sentiment) {
@@ -38,37 +42,58 @@
 				onclick={() => onSelect(comment.id)}
 			>
 				<div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-					<span class="font-medium text-gray-900 dark:text-gray-100">{comment.author}</span>
-					<span>{formatTime(comment.time)}</span>
+					{#if showAuthor}
+						<span class="font-medium text-gray-900 dark:text-gray-100">{comment.author}</span>
+					{/if}
+					{#if showTime}
+						<span>{formatTime(comment.time)}</span>
+					{/if}
 					{#if showSentiment && comment.analysis}
 						{@const badge = sentimentBadge(comment.analysis.sentiment)}
 						<span class="px-2 py-0.5 rounded text-xs {badge.class}">{badge.text}</span>
 					{/if}
 				</div>
 
-				{#if comment.deleted}
-					<p class="text-gray-400 italic mt-1">[deleted]</p>
-				{:else if comment.dead}
-					<p class="text-gray-400 italic mt-1">[dead]</p>
-				{:else}
-					<div class="mt-1 text-sm prose dark:prose-invert max-w-none">
-						{@html comment.text}
+				{#if showCommentText}
+					{#if comment.deleted}
+						<p class="text-gray-400 italic mt-1">[deleted]</p>
+					{:else if comment.dead}
+						<p class="text-gray-400 italic mt-1">[dead]</p>
+					{:else}
+						<div class="mt-1 text-sm prose dark:prose-invert max-w-none">
+							{@html comment.text}
+						</div>
+					{/if}
+				{/if}
+
+				{#if showSummary}
+					<div class="mt-2">
+						<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Summary:</span>
+						{#if analyzing && !comment.analysis?.summary}
+							<span class="text-sm text-gray-400 italic ml-1">Analyzing...</span>
+						{:else if comment.analysis?.summary}
+							<p class="text-sm text-gray-600 dark:text-gray-400 italic">
+								{comment.analysis.summary}
+							</p>
+						{:else}
+							<span class="text-sm text-gray-400 ml-1">—</span>
+						{/if}
 					</div>
 				{/if}
 
-				{#if comment.analysis}
-					{#if showSummary && comment.analysis.summary}
-						<p class="mt-2 text-sm text-gray-600 dark:text-gray-400 italic">
-							{comment.analysis.summary}
-						</p>
-					{/if}
-					{#if showKeywords && comment.analysis.keywords.length > 0}
-						<div class="mt-2 flex flex-wrap gap-1">
-							{#each comment.analysis.keywords as kw}
-								<span class="px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-xs">{kw}</span>
-							{/each}
-						</div>
-					{/if}
+				{#if showKeywords}
+					<div class="mt-2">
+						<span class="text-xs font-medium text-gray-500 dark:text-gray-400">Keywords:</span>
+						{#if comment.analysis?.keywords && comment.analysis.keywords.length > 0}
+							<div class="inline-flex flex-wrap gap-1 ml-1">
+								{#each comment.analysis.keywords as kw}
+									<span class="px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-xs">{kw}</span>
+								{/each}
+							</div>
+						{:else}
+							<span class="text-sm text-gray-400 ml-1">—</span>
+						{/if}
+					</div>
 				{/if}
 			</button>
 		</div>

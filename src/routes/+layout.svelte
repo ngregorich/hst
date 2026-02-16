@@ -33,9 +33,15 @@
 
 <div class="min-h-screen">
 	<header class="border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between">
-		<a href="/" class="text-xl font-semibold hover:text-orange-600 dark:hover:text-orange-400">
-			HN Sentiment
-		</a>
+		<div>
+			<a href="/" class="text-xl font-semibold hover:text-orange-600 dark:hover:text-orange-400">
+				HN Sentiment
+			</a>
+			<p class="text-sm text-gray-500 dark:text-gray-400">
+				AI-powered sentiment analysis for Hacker News threads
+				<a href="https://github.com/ngregorich/hnsentiment" target="_blank" rel="noopener" class="text-orange-600 dark:text-orange-400 hover:underline ml-1">GitHub</a>
+			</p>
+		</div>
 		<button
 			onclick={toggleTheme}
 			class="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800"

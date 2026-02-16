@@ -34,6 +34,26 @@
 	function pct(n: number) {
 		return stats.analyzed > 0 ? Math.round((n / stats.analyzed) * 100) : 0;
 	}
+
+	// NPS-style score: % promoters - % detractors (-100 to +100)
+	let nps = $derived(pct(stats.promoters) - pct(stats.detractors));
+
+	// Color based on NPS score
+	let npsColor = $derived.by(() => {
+		if (nps >= 50) return 'text-green-600 dark:text-green-400';
+		if (nps >= 0) return 'text-lime-600 dark:text-lime-400';
+		if (nps >= -50) return 'text-orange-600 dark:text-orange-400';
+		return 'text-red-600 dark:text-red-400';
+	});
+
+	let npsLabel = $derived.by(() => {
+		if (nps >= 50) return 'Very Positive';
+		if (nps >= 20) return 'Positive';
+		if (nps >= 0) return 'Mixed-Positive';
+		if (nps >= -20) return 'Mixed-Negative';
+		if (nps >= -50) return 'Negative';
+		return 'Very Negative';
+	});
 </script>
 
 <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4">
@@ -45,6 +65,32 @@
 	</div>
 
 	{#if stats.analyzed > 0}
+		<!-- NPS Score -->
+		<div class="flex items-center gap-4">
+			<div class="flex-shrink-0">
+				<div class="text-4xl font-bold {npsColor}">{nps > 0 ? '+' : ''}{nps}</div>
+				<div class="text-sm text-gray-500 dark:text-gray-400">Sentiment Score</div>
+			</div>
+			<div class="flex-1">
+				<div class="text-sm font-medium {npsColor}">{npsLabel}</div>
+				<div class="mt-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+					<!-- Scale: -100 to +100, so 0 is at 50% -->
+					<div
+						class="h-full transition-all duration-300"
+						style="width: {Math.abs(nps) / 2}%; margin-left: {nps >= 0 ? 50 : 50 - Math.abs(nps) / 2}%; background: {nps >= 0 ? '#22c55e' : '#ef4444'};"
+					></div>
+				</div>
+				<div class="flex justify-between text-xs text-gray-400 mt-0.5">
+					<span>-100</span>
+					<span>0</span>
+					<span>+100</span>
+				</div>
+			</div>
+			<div class="text-sm text-gray-500 dark:text-gray-400">
+				{stats.analyzed} of {stats.total} analyzed
+			</div>
+		</div>
+
 		<div class="grid grid-cols-3 gap-4 text-center">
 			<div class="p-3 bg-green-100 dark:bg-green-900/30 rounded">
 				<div class="text-2xl font-bold text-green-700 dark:text-green-400">{pct(stats.promoters)}%</div>
