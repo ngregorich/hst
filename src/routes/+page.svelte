@@ -206,16 +206,22 @@
 		goto(`?post=${data.hnPostId}`, { replaceState: true });
 	}
 
-	async function loadStartupAnalysis() {
+	async function fetchStartupAnalysisData(): Promise<AnalysisExport | null> {
 		try {
 			const res = await fetch(STARTUP_ANALYSIS_PATH, { cache: 'no-store' });
-			if (!res.ok) return;
+			if (!res.ok) return null;
 			const data: AnalysisExport = await res.json();
-			if (!data?.hnPostId || !data?.post || !Array.isArray(data?.comments)) return;
-			await applyImportedAnalysis(data);
+			if (!data?.hnPostId || !data?.post || !Array.isArray(data?.comments)) return null;
+			return data;
 		} catch {
-			// Optional startup file; ignore if missing or invalid.
+			return null;
 		}
+	}
+
+	async function loadStartupAnalysis() {
+		const data = await fetchStartupAnalysisData();
+		if (!data) return;
+		await applyImportedAnalysis(data);
 	}
 
 	// If model changes while analysis data is shown, clear old results so rerun starts from a clean slate.
@@ -265,8 +271,8 @@
 		if (!cachedAnalysis && switchingPosts) {
 			cachedAnalysis = await loadAnyAnalysis(id);
 		}
-		if (cachedAnalysis) {
-			post = cachedAnalysis.post;
+			if (cachedAnalysis) {
+				post = cachedAnalysis.post;
 			comments = cachedAnalysis.comments;
 			threadSummary = cachedAnalysis.threadSummary || '';
 			generatingThreadSummary = false;
@@ -280,11 +286,18 @@
 			}
 			availableAnalysisModels = await listAnalysisModels(id);
 			goto(`?post=${id}`, { replaceState: true });
-			return;
-		}
+				return;
+			}
 
-		// Check for cached HN data (no analysis yet)
-		const cachedHN = await getCachedHNData(id);
+			// Check bundled startup analysis for this post ID
+			const startupAnalysis = await fetchStartupAnalysisData();
+			if (startupAnalysis && startupAnalysis.hnPostId === id) {
+				await applyImportedAnalysis(startupAnalysis);
+				return;
+			}
+
+			// Check for cached HN data (no analysis yet)
+			const cachedHN = await getCachedHNData(id);
 		if (cachedHN) {
 			post = cachedHN.post;
 			comments = cachedHN.comments;
