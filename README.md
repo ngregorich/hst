@@ -106,3 +106,8 @@ interface Comment {
 ## License
 
 MIT
+
+## Contributors
+
+- Claude Opus 4.5
+- ChatGPT Codex 5.3
