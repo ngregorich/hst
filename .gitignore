@@ -1,0 +1,15 @@
+AGENTS.md
+node_modules
+.svelte-kit
+build
+.env
+.env.*
+!.env.example
+.DS_Store
+*.local
+.vercel
+.output
+dist
+coverage
+playwright-report
+test-results

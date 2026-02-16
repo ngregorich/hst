@@ -1,0 +1,129 @@
+{
+  "version": "1.0",
+  "hnPostId": 0,
+  "hnPostUrl": "https://news.ycombinator.com/item?id=0",
+  "title": "Example: Show HN – A New Programming Language",
+  "sentimentQuestion": "\"A New Programming Language\" is a good/positive thing",
+  "model": "openai/gpt-5-mini",
+  "analyzedAt": "2026-02-16T12:00:00.000Z",
+  "post": {
+    "id": 0,
+    "title": "Example: Show HN – A New Programming Language",
+    "url": "https://example.com/new-lang",
+    "author": "example_user",
+    "time": 1739700000,
+    "score": 342,
+    "descendants": 8
+  },
+  "comments": [
+    {
+      "id": 1,
+      "parentId": null,
+      "author": "dev_enthusiast",
+      "time": 1739700600,
+      "text": "This looks really promising! The syntax is clean and the performance benchmarks are impressive. I've been looking for something like this for our backend services.",
+      "children": [
+        {
+          "id": 2,
+          "parentId": 1,
+          "author": "skeptic_coder",
+          "time": 1739701200,
+          "text": "The benchmarks seem cherry-picked. I'd like to see more real-world comparisons against Go and Rust. Also, the ecosystem is non-existent right now.",
+          "children": [
+            {
+              "id": 3,
+              "parentId": 2,
+              "author": "lang_author",
+              "time": 1739701800,
+              "text": "Fair point about the benchmarks. We're working on a more comprehensive suite. The ecosystem is definitely early-stage, but we have FFI support for C libraries which helps.",
+              "children": [],
+              "analysis": {
+                "sentiment": "neutral",
+                "summary": "The language author acknowledges the benchmark criticism and mentions FFI support as a workaround for the limited ecosystem.",
+                "keywords": ["benchmarks", "ecosystem", "FFI", "C libraries"]
+              }
+            }
+          ],
+          "analysis": {
+            "sentiment": "detractor",
+            "summary": "Commenter is skeptical about the benchmarks and concerned about the lack of ecosystem.",
+            "keywords": ["benchmarks", "Go", "Rust", "ecosystem"]
+          }
+        }
+      ],
+      "analysis": {
+        "sentiment": "promoter",
+        "summary": "Enthusiastic about the clean syntax and performance, considering it for backend services.",
+        "keywords": ["syntax", "performance", "backend services", "promising"]
+      }
+    },
+    {
+      "id": 4,
+      "parentId": null,
+      "author": "pragmatic_pete",
+      "time": 1739702400,
+      "text": "Yet another programming language. We don't need more languages, we need better tooling for existing ones. What problem does this actually solve that isn't already solved?",
+      "children": [
+        {
+          "id": 5,
+          "parentId": 4,
+          "author": "curious_dev",
+          "time": 1739703000,
+          "text": "I think the memory safety without GC angle is interesting. Rust does this but the learning curve is steep. If this can achieve similar safety with simpler syntax, that's valuable.",
+          "children": [],
+          "analysis": {
+            "sentiment": "neutral",
+            "summary": "Sees potential value in the memory safety approach if it's easier than Rust.",
+            "keywords": ["memory safety", "GC", "Rust", "learning curve", "syntax"]
+          }
+        }
+      ],
+      "analysis": {
+        "sentiment": "detractor",
+        "summary": "Dismissive of the need for new languages, questions what unique problem it solves.",
+        "keywords": ["tooling", "existing languages", "problem solving"]
+      }
+    },
+    {
+      "id": 6,
+      "parentId": null,
+      "author": "early_adopter",
+      "time": 1739703600,
+      "text": "I've been using this for a side project for 3 months now. The compiler error messages are fantastic - best I've seen since Elm. The standard library is minimal but well-designed.",
+      "children": [
+        {
+          "id": 7,
+          "parentId": 6,
+          "author": "tooling_fan",
+          "time": 1739704200,
+          "text": "How's the IDE support? That's usually what kills new languages for me. I need good autocomplete and inline errors.",
+          "children": [
+            {
+              "id": 8,
+              "parentId": 7,
+              "author": "early_adopter",
+              "time": 1739704800,
+              "text": "There's a basic LSP server that works with VS Code and Neovim. Autocomplete is decent, but refactoring tools are still missing. It's usable but not polished yet.",
+              "children": [],
+              "analysis": {
+                "sentiment": "neutral",
+                "summary": "Reports that IDE support exists via LSP but lacks advanced features like refactoring.",
+                "keywords": ["LSP", "VS Code", "Neovim", "autocomplete", "refactoring"]
+              }
+            }
+          ],
+          "analysis": {
+            "sentiment": "neutral",
+            "summary": "Asks about IDE support quality, which is a key factor in language adoption for them.",
+            "keywords": ["IDE support", "autocomplete", "inline errors"]
+          }
+        }
+      ],
+      "analysis": {
+        "sentiment": "promoter",
+        "summary": "Has been using the language for months, praises compiler error messages and standard library design.",
+        "keywords": ["compiler errors", "Elm", "standard library", "side project"]
+      }
+    }
+  ]
+}
