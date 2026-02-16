@@ -127,9 +127,9 @@ let layout = $derived.by(() => {
 				tabindex="0"
 				onclick={() => onSelect(node.id)}
 				onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && onSelect(node.id)}
-				aria-label="{node.author}: {node.sentiment || 'not analyzed yet'}"
+				aria-label="{node.author}: {node.sentiment || 'empty'}"
 			>
-				<title>{node.author}: {node.sentiment || 'not analyzed yet'}</title>
+				<title>{node.author}: {node.sentiment || 'empty'}</title>
 				<rect
 					x={node.x - NODE_SIZE / 2}
 					y={node.y - NODE_SIZE / 2}

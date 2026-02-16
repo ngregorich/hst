@@ -31,7 +31,7 @@ describe('formatCost', () => {
 	});
 
 	it('formats larger costs with 2 decimals', () => {
-		expect(formatCost(1.234)).toBe('~$1.23');
+		expect(formatCost(1.234)).toBe('$1.23');
 	});
 });
 

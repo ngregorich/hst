@@ -32,15 +32,24 @@
 </script>
 
 <div class="min-h-screen">
-	<header class="border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between">
+	<header class="border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-start justify-between gap-4">
 		<div>
 			<a href="/" class="text-xl font-semibold hover:text-orange-600 dark:hover:text-orange-400">
 				HN Sentiment Tool (HST)
 			</a>
 			<p class="text-sm text-gray-500 dark:text-gray-400">
-				AI-powered sentiment analysis for Hacker News threads
-				<a href="https://github.com/ngregorich/hst" target="_blank" rel="noopener" class="text-orange-600 dark:text-orange-400 hover:underline ml-1">GitHub</a>
+				AI-powered sentiment analysis for <a href="https://news.ycombinator.com" target="_blank" rel="noopener" class="text-orange-600 dark:text-orange-400 hover:underline">Hacker News</a> threads
+				<span class="mx-1 text-gray-400 dark:text-gray-500">&middot;</span>
+				<a href="https://github.com/ngregorich/hst" target="_blank" rel="noopener" class="text-orange-600 dark:text-orange-400 hover:underline">GitHub</a>
 			</p>
+			<ol class="mt-2 list-decimal list-inside text-xs text-gray-600 dark:text-gray-300 space-y-0.5">
+				<li>Paste <a href="https://news.ycombinator.com" target="_blank" rel="noopener" class="text-orange-600 dark:text-orange-400 hover:underline">Hacker News</a> URL / post id</li>
+					<li>Load thread data</li>
+					<li>Enter your <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" class="text-orange-600 dark:text-orange-400 hover:underline">OpenRouter API key</a></li>
+					<li>Select LLM model</li>
+					<li>Fine tune sentiment question</li>
+					<li>Run analysis</li>
+				</ol>
 		</div>
 		<button
 			onclick={toggleTheme}

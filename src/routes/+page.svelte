@@ -118,6 +118,22 @@
 		}
 	});
 
+	// Auto-load when post input changes (debounced), but only for valid IDs/URLs.
+	$effect(() => {
+		const raw = postInput.trim();
+		if (!raw) return;
+		if (loadingPost) return;
+
+		const timer = setTimeout(() => {
+			const parsedId = parsePostId(raw);
+			if (!parsedId) return;
+			if (post?.id === parsedId) return;
+			loadPost();
+		}, 450);
+
+		return () => clearTimeout(timer);
+	});
+
 	// Save prefs when they change
 	$effect(() => {
 		savePrefs(prefs);
@@ -254,7 +270,7 @@
 		error = '';
 		const id = parsePostId(postInput);
 		if (!id) {
-			error = 'Invalid HN URL or post ID';
+			error = 'Invalid HN URL or post id';
 			return;
 		}
 
@@ -625,17 +641,6 @@
 </script>
 
 <div class="max-w-7xl mx-auto space-y-6">
-	<div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-2">
-		<h2 class="text-sm font-semibold">Usage</h2>
-			<ol class="list-decimal list-inside text-sm text-gray-700 dark:text-gray-300 space-y-1">
-				<li>Paste Hacker News URL / post ID.</li>
-				<li>Load thread data.</li>
-				<li>Enter your <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" class="text-orange-600 dark:text-orange-400 hover:underline">OpenRouter API key</a>.</li>
-				<li>Select LLM model.</li>
-				<li>Fine tune sentiment question.</li>
-				<li>Run analysis.</li>
-			</ol>
-		</div>
 
 	<InputPanel
 		bind:postInput
@@ -665,9 +670,9 @@
 
 	{#if !post && !loadingPost}
 		<div class="border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center space-y-4">
-			<h2 class="text-lg font-medium">Analyze sentiment in Hacker News threads</h2>
+			<h2 class="text-lg font-medium">Analyze sentiment in <a href="https://news.ycombinator.com" target="_blank" rel="noopener" class="text-orange-600 dark:text-orange-400 hover:underline">Hacker News</a> threads</h2>
 			<p class="text-gray-600 dark:text-gray-400">
-				Paste an HN URL/post ID, or place an exported JSON at <code>{STARTUP_ANALYSIS_PATH}</code> to auto-load on startup.
+				Paste an HN URL/post id, or place an exported JSON at <code>{STARTUP_ANALYSIS_PATH}</code> to auto-load on startup.
 			</p>
 		</div>
 	{/if}
@@ -697,8 +702,8 @@
 				</div>
 			</div>
 
-			<div class="space-y-1">
-				<div class="flex gap-2 items-center flex-wrap">
+				<div class="space-y-1">
+					<div class="flex gap-2 items-center flex-wrap">
 					<button
 						onclick={runAnalysis}
 						disabled={analyzing || !prefs.apiKey}
@@ -715,17 +720,17 @@
 							Stop
 						</button>
 					{/if}
-					{#if tokenEstimate}
-						<div class="text-sm text-gray-600 dark:text-gray-400">
-							Estimated: {formatTokens(tokenEstimate.totalTokens)} tokens ({tokenEstimate.commentCount} comments) &middot; {formatCost(tokenEstimate.estimatedCost)}
+						{#if tokenEstimate}
+							<div class="text-sm text-gray-600 dark:text-gray-400">
+								Estimated: {formatTokens(tokenEstimate.totalTokens)} tokens ({tokenEstimate.commentCount} comments) &middot; {formatCost(tokenEstimate.estimatedCost)}
+							</div>
+						{/if}
+					</div>
+					{#if lastAnalysisModel}
+						<div class="text-xs text-gray-500 dark:text-gray-400">
+							Last run: {lastAnalysisModel}
 						</div>
 					{/if}
-				</div>
-				{#if lastAnalysisModel}
-					<div class="text-xs text-gray-500 dark:text-gray-400">
-						Last run: {lastAnalysisModel}
-					</div>
-				{/if}
 			</div>
 
 			{#if prefs.showApiDebug}
@@ -878,7 +883,7 @@
 									<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block"></span>Promoter</span>
 									<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-slate-500 inline-block"></span>Neutral</span>
 									<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm detractor-legend inline-block"></span>Detractor</span>
-									<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-gray-200 dark:bg-gray-700 border border-gray-400 dark:border-gray-500 inline-block"></span>Not analyzed</span>
+									<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-gray-200 dark:bg-gray-700 border border-gray-400 dark:border-gray-500 inline-block"></span>Empty</span>
 								</div>
 								<TreeView comments={displayedComments} {selectedId} onSelect={selectComment} />
 							</div>
@@ -911,7 +916,7 @@
 					onCommentJump={jumpToCommentFromKeyword}
 				/>
 			{/if}
-	{/if}
+		{/if}
 </div>
 
 <style>

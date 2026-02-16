@@ -62,7 +62,7 @@ import { DEFAULT_ANALYSIS_PROMPT_TEMPLATE, DEFAULT_QUESTION_PROMPT_TEMPLATE, DEF
 
 <div class="space-y-4 w-full border border-gray-200 dark:border-gray-700 rounded-lg p-4">
 	<div>
-		<label for="post-input" class="block text-sm font-medium mb-1">HN Post URL or ID</label>
+		<label for="post-input" class="block text-sm font-medium mb-1">HN Post URL or id</label>
 		<div class="flex gap-2">
 			<input
 				id="post-input"
@@ -87,19 +87,21 @@ import { DEFAULT_ANALYSIS_PROMPT_TEMPLATE, DEFAULT_QUESTION_PROMPT_TEMPLATE, DEF
 		</div>
 	</div>
 
-	<div>
-		<label for="api-key" class="block text-sm font-medium mb-1">
-			OpenRouter API Key
-			<a
-				href="https://openrouter.ai/keys"
-				target="_blank"
-				rel="noopener"
-				class="text-orange-600 dark:text-orange-400 hover:underline ml-2 text-xs"
-			>
-				Get one
-			</a>
-			<span class="text-gray-400 text-xs ml-2">(stored locally, no backend)</span>
-		</label>
+		<div>
+			<label for="api-key" class="block text-sm font-medium mb-1">
+				OpenRouter API Key
+				<span class="mx-1 text-gray-400 dark:text-gray-500">&middot;</span>
+				<a
+					href="https://openrouter.ai/keys"
+					target="_blank"
+					rel="noopener"
+					class="text-orange-600 dark:text-orange-400 hover:underline text-xs"
+				>
+					Get one
+				</a>
+				<span class="mx-1 text-gray-400 dark:text-gray-500">&middot;</span>
+				<span class="text-gray-400 text-xs">(stored locally, no backend)</span>
+			</label>
 		<input
 			id="api-key"
 			name="openrouter-api-key"
