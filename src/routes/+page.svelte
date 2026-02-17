@@ -531,7 +531,15 @@
 				threadEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 			}
 			const treeEl = document.getElementById(`tree-node-${prefix}${id}`);
-			treeEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+			const treePane = document.getElementById(isMobile ? 'tree-pane-mobile' : 'tree-pane-desktop');
+			if (treeEl && treePane) {
+				const paneRect = treePane.getBoundingClientRect();
+				const nodeRect = treeEl.getBoundingClientRect();
+				const targetTop = treePane.scrollTop + (nodeRect.top - paneRect.top) - 20;
+				treePane.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+			} else {
+				treeEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+			}
 		});
 	}
 
@@ -917,7 +925,7 @@
 				<div class="h-[70vh] min-h-[420px] max-h-[900px] overflow-hidden hidden md:block">
 					<SplitPane initialWidth={280} minWidth={140} maxWidth={420}>
 						{#snippet left()}
-							<div class="h-full border border-gray-200 dark:border-gray-700 rounded p-3 mr-1 overflow-auto">
+							<div id="tree-pane-desktop" class="h-full border border-gray-200 dark:border-gray-700 rounded p-3 mr-1 overflow-auto">
 								<h3 class="text-sm font-medium mb-2">Comment Tree</h3>
 								<p class="mb-2 text-xs text-gray-500 dark:text-gray-400">Use arrow keys to navigate</p>
 								<div class="mb-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
@@ -949,9 +957,9 @@
 						{/snippet}
 					</SplitPane>
 				</div>
-					<div class="space-y-3 md:hidden">
-					<div class="relative border border-gray-200 dark:border-gray-700 rounded p-3 max-h-[48vh] overflow-hidden">
-						<div class="h-full overflow-auto pb-12 pr-1">
+				<div class="space-y-3 md:hidden">
+					<div class="relative border border-gray-200 dark:border-gray-700 rounded p-3 h-[48vh] min-h-[260px] overflow-hidden">
+						<div id="tree-pane-mobile" class="h-full overflow-auto touch-pan-y pb-12 pr-1">
 							<h3 class="text-sm font-medium mb-2">Comment Tree</h3>
 							<p class="mb-2 text-xs text-gray-500 dark:text-gray-400">Use arrow keys to navigate</p>
 							<div class="mb-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
