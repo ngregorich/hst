@@ -70,11 +70,13 @@
 					{#if showTime}
 						<span>{formatTime(comment.time)}</span>
 					{/if}
-					{#if showSentiment && comment.analysis}
-						{@const badge = sentimentBadge(comment.analysis.sentiment)}
-						<span class="px-2 py-0.5 rounded text-xs {badge.class}">{badge.text} · NPS {commentNps(comment)}</span>
-					{/if}
 				</div>
+				{#if showSentiment && comment.analysis}
+					{@const badge = sentimentBadge(comment.analysis.sentiment)}
+					<div class="mt-1 sm:mt-0">
+						<span class="inline-block px-2 py-0.5 rounded text-xs {badge.class}">{badge.text} · NPS {commentNps(comment)}</span>
+					</div>
+				{/if}
 
 				{#if showCommentText}
 					{#if comment.deleted}

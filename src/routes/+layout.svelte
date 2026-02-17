@@ -51,6 +51,9 @@
 					</a>
 				{/if}
 			</p>
+			<p class="mt-1 text-xs text-amber-700 dark:text-amber-400">
+				UX optimized for desktop.
+			</p>
 			<ol class="mt-2 list-decimal list-inside text-xs text-gray-600 dark:text-gray-300 space-y-0.5">
 				<li>Paste <a href="https://news.ycombinator.com" target="_blank" rel="noopener" class="text-orange-600 dark:text-orange-400 hover:underline">Hacker News</a> URL / post id</li>
 					<li>Load thread data</li>

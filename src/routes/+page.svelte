@@ -521,7 +521,15 @@
 			const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
 			const prefix = isMobile ? MOBILE_ID_PREFIX : DESKTOP_ID_PREFIX;
 			const threadEl = document.getElementById(`comment-${prefix}${id}`);
-			threadEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			const threadPane = document.getElementById(isMobile ? 'thread-pane-mobile' : 'thread-pane-desktop');
+			if (threadEl && threadPane) {
+				const paneRect = threadPane.getBoundingClientRect();
+				const commentRect = threadEl.getBoundingClientRect();
+				const targetTop = threadPane.scrollTop + (commentRect.top - paneRect.top) - 12;
+				threadPane.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+			} else {
+				threadEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			}
 			const treeEl = document.getElementById(`tree-node-${prefix}${id}`);
 			treeEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
 		});
@@ -893,7 +901,7 @@
 							</div>
 						{/snippet}
 						{#snippet right()}
-							<div class="h-full pl-2 overflow-auto">
+							<div id="thread-pane-desktop" class="h-full pl-2 overflow-auto">
 								<ThreadView
 									comments={displayedComments}
 									{selectedId}
@@ -924,7 +932,7 @@
 						</div>
 						<TreeView comments={displayedComments} {selectedId} idPrefix={MOBILE_ID_PREFIX} onSelect={selectComment} />
 					</div>
-					<div class="border border-gray-200 dark:border-gray-700 rounded p-2 overflow-auto max-h-[55vh]">
+					<div id="thread-pane-mobile" class="border border-gray-200 dark:border-gray-700 rounded p-2 overflow-auto max-h-[55vh]">
 						<ThreadView
 							comments={displayedComments}
 							{selectedId}
