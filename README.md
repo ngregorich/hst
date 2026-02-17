@@ -12,7 +12,7 @@ Sentiment analysis tool for Hacker News threads. Analyze comment sentiment, extr
 - **Tree Visualization**: File-tree style view with color-coded sentiment, keyboard navigation
 - **Threaded View**: HN-style nested comments with inline analysis
 - **Keyword Analysis**: Sortable table of keywords by sentiment breakdown
-- **Export/Import**: Save and share analyses as JSON
+- **Import / Export**: Save and share analyses as JSON
 
 ## Usage
 
@@ -23,7 +23,7 @@ Sentiment analysis tool for Hacker News threads. Analyze comment sentiment, extr
 5. Fine tune sentiment question
 6. Run analysis
 
-To auto-load an exported analysis at startup, place it at `static/examples/startup-analysis.json` before building/deploying.
+To auto-load an exported analysis at startup, place it at `static/examples/startup-analysis.json` before building / deploying.
 
 ## Models
 
