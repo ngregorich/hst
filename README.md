@@ -12,7 +12,7 @@ Sentiment analysis tool for Hacker News threads. Analyze comment sentiment, extr
 - **Tree Visualization**: File-tree style view with color-coded sentiment, keyboard navigation
 - **Threaded View**: HN-style nested comments with inline analysis
 - **Keyword Analysis**: Sortable table of keywords by sentiment breakdown
-- **Import / Export**: Save and share analyses as JSON
+- **Import / Export**: Save and share analyses as JSON (single-model or multi-model bundle)
 
 ## Usage
 
@@ -74,17 +74,35 @@ npm run dev
 
 ## JSON Schema
 
-Analyses export as JSON with the following structure:
+Analyses export as JSON with the following structure (default is multi-model bundle):
 
 ```typescript
-interface AnalysisExport {
+interface MultiModelAnalysisExport {
   version: string;           // Schema version (currently "1.0")
+  hnPostId: number;
+  hnPostUrl: string;
+  title: string;
+  exportedAt: string;        // ISO 8601
+  post: HNPost;
+  analyses: Array<{
+    model: string;
+    sentimentQuestion: string;
+    analyzedAt: string;      // ISO 8601
+    threadSummary?: string;
+    comments: Comment[];
+  }>;
+}
+
+// Legacy single-model export is still importable:
+interface AnalysisExport {
+  version: string;
   hnPostId: number;
   hnPostUrl: string;
   title: string;
   sentimentQuestion: string;
   model: string;
   analyzedAt: string;        // ISO 8601
+  threadSummary?: string;
   post: HNPost;
   comments: Comment[];
 }

@@ -45,6 +45,24 @@ export interface AnalysisExport {
 	comments: Comment[];
 }
 
+export interface AnalysisModelSnapshot {
+	model: string;
+	sentimentQuestion: string;
+	analyzedAt: string;
+	threadSummary?: string;
+	comments: Comment[];
+}
+
+export interface MultiModelAnalysisExport {
+	version: string;
+	hnPostId: number;
+	hnPostUrl: string;
+	title: string;
+	exportedAt: string;
+	post: HNPost;
+	analyses: AnalysisModelSnapshot[];
+}
+
 export interface AnalysisState {
 	post: HNPost | null;
 	comments: Comment[];

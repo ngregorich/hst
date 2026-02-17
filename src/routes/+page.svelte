@@ -11,9 +11,9 @@
 	import SplitPane from '$lib/components/SplitPane.svelte';
 	import { parsePostId, fetchPost, fetchComments, flattenComments, sortCommentsTree, generateSentimentQuestion as generateBasicQuestion } from '$lib/hn';
 	import { analyzeCommentsBatch, generateSentimentQuestion as generateAIQuestion, generateThreadSummary, type ThreadSummaryInput, type OpenRouterDebugEvent } from '$lib/openrouter';
-	import { loadPrefs, savePrefs, saveAnalysis, loadAnalysis, loadAnyAnalysis, listAnalysisModels, exportToFile, importFromFile, cacheHNData, getCachedHNData, type Preferences } from '$lib/storage';
+	import { loadPrefs, savePrefs, saveAnalysis, loadAnalysis, loadAnyAnalysis, listAnalysisModels, loadAllAnalyses, exportToFile, importFromFile, cacheHNData, getCachedHNData, type Preferences } from '$lib/storage';
 	import { estimateTokens, formatCost, formatTokens } from '$lib/tokens';
-	import { DEFAULT_MODEL, SCHEMA_VERSION, type Comment, type HNPost, type AnalysisExport } from '$lib/schema';
+	import { DEFAULT_MODEL, SCHEMA_VERSION, type Comment, type HNPost, type AnalysisExport, type MultiModelAnalysisExport } from '$lib/schema';
 
 	const STARTUP_ANALYSIS_PATH = '/examples/startup-analysis.json';
 
@@ -91,6 +91,11 @@
 
 	// Derived
 	let tokenEstimate = $derived(comments.length > 0 ? estimateTokens(comments, prefs.model) : null);
+	let commentDiscoveryTotal = $derived.by(() => {
+		if (discoveredComments === null) return 0;
+		const estimated = post?.descendants || 0;
+		return Math.max(estimated, discoveredComments, 1);
+	});
 
 	// Load from URL param on mount + enable global keyboard navigation
 	onMount(() => {
@@ -224,12 +229,52 @@
 		goto(`?post=${data.hnPostId}`, { replaceState: true });
 	}
 
-	async function fetchStartupAnalysisData(): Promise<AnalysisExport | null> {
+	async function applyImportedBundle(data: MultiModelAnalysisExport): Promise<void> {
+		if (!data.analyses?.length) return;
+
+		for (const entry of data.analyses) {
+			const single: AnalysisExport = {
+				version: data.version || SCHEMA_VERSION,
+				hnPostId: data.hnPostId,
+				hnPostUrl: data.hnPostUrl || `https://news.ycombinator.com/item?id=${data.hnPostId}`,
+				title: data.title || data.post.title,
+				sentimentQuestion: entry.sentimentQuestion,
+				model: entry.model,
+				analyzedAt: entry.analyzedAt || data.exportedAt || new Date().toISOString(),
+				threadSummary: entry.threadSummary,
+				post: data.post,
+				comments: entry.comments
+			};
+			await saveAnalysis(single);
+		}
+
+		const preferredModel = data.analyses.some((a) => a.model === prefs.model) ? prefs.model : data.analyses[0].model;
+		const selected = await loadAnalysis(data.hnPostId, preferredModel);
+		if (selected) {
+			await applyImportedAnalysis(selected);
+		}
+	}
+
+	async function applyImportedAny(data: AnalysisExport | MultiModelAnalysisExport): Promise<void> {
+		if ('analyses' in data) {
+			await applyImportedBundle(data);
+			return;
+		}
+		await saveAnalysis(data);
+		await applyImportedAnalysis(data);
+	}
+
+	async function fetchStartupAnalysisData(): Promise<AnalysisExport | MultiModelAnalysisExport | null> {
 		try {
 			const res = await fetch(STARTUP_ANALYSIS_PATH, { cache: 'no-store' });
 			if (!res.ok) return null;
-			const data: AnalysisExport = await res.json();
-			if (!data?.hnPostId || !data?.post || !Array.isArray(data?.comments)) return null;
+			const data: AnalysisExport | MultiModelAnalysisExport = await res.json();
+			if (!data?.hnPostId || !data?.post) return null;
+			if ('analyses' in data) {
+				if (!Array.isArray(data.analyses) || data.analyses.length === 0) return null;
+			} else {
+				if (!Array.isArray(data.comments)) return null;
+			}
 			return data;
 		} catch {
 			return null;
@@ -239,7 +284,7 @@
 	async function loadStartupAnalysis() {
 		const data = await fetchStartupAnalysisData();
 		if (!data) return;
-		await applyImportedAnalysis(data);
+		await applyImportedAny(data);
 	}
 
 	// If model changes while analysis data is shown, clear old results so rerun starts from a clean slate.
@@ -310,7 +355,7 @@
 			// Check bundled startup analysis for this post ID
 			const startupAnalysis = await fetchStartupAnalysisData();
 			if (startupAnalysis && startupAnalysis.hnPostId === id) {
-				await applyImportedAnalysis(startupAnalysis);
+				await applyImportedAny(startupAnalysis);
 				return;
 			}
 
@@ -496,9 +541,29 @@
 		};
 	}
 
-	function handleExport() {
+	async function handleExport() {
 		if (!post) return;
-		exportToFile(buildExport());
+		const savedAnalyses = await loadAllAnalyses(post.id);
+		if (savedAnalyses.length === 0) {
+			exportToFile(buildExport());
+			return;
+		}
+		const bundled: MultiModelAnalysisExport = {
+			version: SCHEMA_VERSION,
+			hnPostId: post.id,
+			hnPostUrl: `https://news.ycombinator.com/item?id=${post.id}`,
+			title: post.title,
+			exportedAt: new Date().toISOString(),
+			post: $state.snapshot(post),
+			analyses: savedAnalyses.map((entry) => ({
+				model: entry.model,
+				sentimentQuestion: entry.sentimentQuestion,
+				analyzedAt: entry.analyzedAt,
+				threadSummary: entry.threadSummary,
+				comments: entry.comments
+			}))
+		};
+		exportToFile(bundled);
 	}
 
 	async function handleImport(e: Event) {
@@ -508,7 +573,7 @@
 
 		try {
 			const data = await importFromFile(file);
-			await applyImportedAnalysis(data);
+			await applyImportedAny(data);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Import failed';
 		}
@@ -709,12 +774,11 @@
 	{/if}
 
 	{#if discoveredComments !== null}
-		<div class="flex items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
-			<div class="h-2 w-32 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden">
-				<div class="h-full bg-orange-500 animate-pulse" style="width: 100%"></div>
-			</div>
-			<span>Discovering comments... {discoveredComments} found</span>
-		</div>
+		<ProgressBar
+			done={discoveredComments}
+			total={commentDiscoveryTotal}
+			label="Discovering comments (estimated)"
+		/>
 	{/if}
 
 	{#if !post && !loadingPost}

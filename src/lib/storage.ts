@@ -1,5 +1,5 @@
 import { get, set, del, keys } from 'idb-keyval';
-import { DEFAULT_MODEL, type AnalysisExport, type Comment, type HNPost } from './schema';
+import { DEFAULT_MODEL, type AnalysisExport, type Comment, type HNPost, type MultiModelAnalysisExport } from './schema';
 import { DEFAULT_ANALYSIS_PROMPT_TEMPLATE, DEFAULT_QUESTION_PROMPT_TEMPLATE, DEFAULT_THREAD_SUMMARY_PROMPT_TEMPLATE } from './prompts';
 
 const STORAGE_KEY_PREFIX = 'hn-analysis-';
@@ -171,32 +171,78 @@ export async function listAnalysisModels(postId: number): Promise<string[]> {
 	}
 }
 
+export async function loadAllAnalyses(postId: number): Promise<AnalysisExport[]> {
+	try {
+		const allKeys = await keys();
+		const prefix = `${STORAGE_KEY_PREFIX}${postId}-`;
+		const matching = allKeys.filter(
+			(k): k is string => typeof k === 'string' && k.startsWith(prefix)
+		);
+		if (matching.length === 0) return [];
+
+		const analyses: AnalysisExport[] = [];
+		for (const key of matching) {
+			const data = await get(key);
+			if (
+				data &&
+				typeof data.hnPostId === 'number' &&
+				typeof data.model === 'string' &&
+				data.hnPostId === postId
+			) {
+				analyses.push(data as AnalysisExport);
+			}
+		}
+
+		return analyses.sort((a, b) => {
+			const aTime = Date.parse(a.analyzedAt || '') || 0;
+			const bTime = Date.parse(b.analyzedAt || '') || 0;
+			if (bTime !== aTime) return bTime - aTime;
+			return a.model.localeCompare(b.model);
+		});
+	} catch {
+		return [];
+	}
+}
+
 // Export/import as JSON file
-export function exportToFile(data: AnalysisExport): void {
+export function exportToFile(data: AnalysisExport | MultiModelAnalysisExport): void {
 	const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
 	const url = URL.createObjectURL(blob);
 	const a = document.createElement('a');
-	const safeModel = (data.model || 'unknown-model')
-		.toLowerCase()
-		.replace(/[^a-z0-9._-]+/g, '-')
-		.replace(/^-+|-+$/g, '');
-	const runDate = new Date(data.analyzedAt || Date.now());
-	const runTimestamp = Number.isNaN(runDate.getTime())
+	const exportDate = new Date(('exportedAt' in data ? data.exportedAt : data.analyzedAt) || Date.now());
+	const exportTimestamp = Number.isNaN(exportDate.getTime())
 		? 'unknown-time'
-		: runDate.toISOString().replace(/\.\d{3}Z$/, 'Z').replace(/[:T]/g, '-').replace('Z', 'Z');
+		: exportDate.toISOString().replace(/\.\d{3}Z$/, 'Z').replace(/[:T]/g, '-').replace('Z', 'Z');
 	a.href = url;
-	a.download = `hn-${data.hnPostId}-${safeModel}-${runTimestamp}-analysis.json`;
+	if ('analyses' in data) {
+		a.download = `hn-${data.hnPostId}-${data.analyses.length}-models-${exportTimestamp}-analysis-bundle.json`;
+	} else {
+		const safeModel = (data.model || 'unknown-model')
+			.toLowerCase()
+			.replace(/[^a-z0-9._-]+/g, '-')
+			.replace(/^-+|-+$/g, '');
+		a.download = `hn-${data.hnPostId}-${safeModel}-${exportTimestamp}-analysis.json`;
+	}
 	a.click();
 	URL.revokeObjectURL(url);
 }
 
-export function importFromFile(file: File): Promise<AnalysisExport> {
+export function importFromFile(file: File): Promise<AnalysisExport | MultiModelAnalysisExport> {
 	return new Promise((resolve, reject) => {
 		const reader = new FileReader();
 		reader.onload = () => {
 			try {
 				const data = JSON.parse(reader.result as string);
 				if (!data.version || !data.hnPostId) {
+					reject(new Error('Invalid analysis file'));
+					return;
+				}
+				if (Array.isArray(data.analyses)) {
+					if (!data.post || data.analyses.length === 0) {
+						reject(new Error('Invalid multi-model analysis file'));
+						return;
+					}
+				} else if (!data.model || !Array.isArray(data.comments)) {
 					reject(new Error('Invalid analysis file'));
 					return;
 				}
