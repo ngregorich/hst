@@ -535,6 +535,35 @@
 		});
 	}
 
+	function selectFirstComment(): void {
+		const firstId = navIndex.flatIds[0];
+		if (firstId !== undefined) {
+			selectComment(firstId);
+		}
+	}
+
+	function canStepLinear(delta: -1 | 1): boolean {
+		if (selectedId === null) {
+			return delta === 1 && navIndex.flatIds.length > 0;
+		}
+		const currentPos = navIndex.positionById.get(selectedId);
+		if (currentPos === undefined) return false;
+		const nextPos = currentPos + delta;
+		return nextPos >= 0 && nextPos < navIndex.flatIds.length;
+	}
+
+	function stepLinear(delta: -1 | 1): void {
+		if (selectedId === null) {
+			selectFirstComment();
+			return;
+		}
+		const currentPos = navIndex.positionById.get(selectedId);
+		if (currentPos === undefined) return;
+		const nextPos = currentPos + delta;
+		if (nextPos < 0 || nextPos >= navIndex.flatIds.length) return;
+		selectComment(navIndex.flatIds[nextPos]);
+	}
+
 	function isTypingTarget(target: EventTarget | null): boolean {
 		if (!(target instanceof HTMLElement)) return false;
 		const tag = target.tagName.toLowerCase();
@@ -920,17 +949,37 @@
 						{/snippet}
 					</SplitPane>
 				</div>
-				<div class="space-y-3 md:hidden">
-					<div class="border border-gray-200 dark:border-gray-700 rounded p-3 overflow-auto max-h-[48vh]">
-						<h3 class="text-sm font-medium mb-2">Comment Tree</h3>
-						<p class="mb-2 text-xs text-gray-500 dark:text-gray-400">Use arrow keys to navigate</p>
-						<div class="mb-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
-							<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block"></span>Promoter</span>
-							<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-slate-500 inline-block"></span>Neutral</span>
-							<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm detractor-legend inline-block"></span>Detractor</span>
-							<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-gray-200 dark:bg-gray-700 border border-gray-400 dark:border-gray-500 inline-block"></span>Empty</span>
+					<div class="space-y-3 md:hidden">
+					<div class="relative border border-gray-200 dark:border-gray-700 rounded p-3 max-h-[48vh] overflow-hidden">
+						<div class="h-full overflow-auto pb-12 pr-1">
+							<h3 class="text-sm font-medium mb-2">Comment Tree</h3>
+							<p class="mb-2 text-xs text-gray-500 dark:text-gray-400">Use arrow keys to navigate</p>
+							<div class="mb-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+								<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block"></span>Promoter</span>
+								<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-slate-500 inline-block"></span>Neutral</span>
+								<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm detractor-legend inline-block"></span>Detractor</span>
+								<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-gray-200 dark:bg-gray-700 border border-gray-400 dark:border-gray-500 inline-block"></span>Empty</span>
+							</div>
+							<TreeView comments={displayedComments} {selectedId} idPrefix={MOBILE_ID_PREFIX} onSelect={selectComment} />
 						</div>
-						<TreeView comments={displayedComments} {selectedId} idPrefix={MOBILE_ID_PREFIX} onSelect={selectComment} />
+						<div class="absolute bottom-2 right-2 z-10 flex gap-2">
+							<button
+								type="button"
+								class="w-9 h-9 rounded border border-gray-300 dark:border-gray-600 bg-white/90 dark:bg-gray-800/90 text-gray-700 dark:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+								onclick={() => stepLinear(-1)}
+								disabled={!canStepLinear(-1)}
+								aria-label="Previous comment"
+								title="Previous comment"
+							>↑</button>
+							<button
+								type="button"
+								class="w-9 h-9 rounded border border-gray-300 dark:border-gray-600 bg-white/90 dark:bg-gray-800/90 text-gray-700 dark:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+								onclick={() => stepLinear(1)}
+								disabled={!canStepLinear(1)}
+								aria-label="Next comment"
+								title="Next comment"
+							>↓</button>
+						</div>
 					</div>
 					<div id="thread-pane-mobile" class="border border-gray-200 dark:border-gray-700 rounded p-2 overflow-auto max-h-[55vh]">
 						<ThreadView

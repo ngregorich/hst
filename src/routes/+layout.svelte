@@ -51,7 +51,7 @@
 					</a>
 				{/if}
 			</p>
-			<p class="mt-1 text-xs text-amber-700 dark:text-amber-400">
+			<p class="mt-1 text-xs text-amber-700 dark:text-amber-400 md:hidden">
 				UX optimized for desktop.
 			</p>
 			<ol class="mt-2 list-decimal list-inside text-xs text-gray-600 dark:text-gray-300 space-y-0.5">
