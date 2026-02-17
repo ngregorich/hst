@@ -7,6 +7,9 @@
 
 	let prefs = $state<Preferences>(loadPrefs());
 	let darkMode = $state(false);
+	const gitCommit = import.meta.env.VITE_GIT_COMMIT as string | undefined;
+	const shortCommit = gitCommit ? gitCommit.slice(0, 7) : null;
+	const commitUrl = gitCommit ? `https://github.com/ngregorich/hst/commit/${gitCommit}` : null;
 
 	function updateTheme() {
 		if (prefs.theme === 'system') {
@@ -41,6 +44,12 @@
 				AI-powered sentiment analysis for <a href="https://news.ycombinator.com" target="_blank" rel="noopener" class="text-orange-600 dark:text-orange-400 hover:underline">Hacker News</a> threads
 				<span class="mx-1 text-gray-400 dark:text-gray-500">&middot;</span>
 				<a href="https://github.com/ngregorich/hst" target="_blank" rel="noopener" class="text-orange-600 dark:text-orange-400 hover:underline">GitHub</a>
+				{#if shortCommit && commitUrl}
+					<span class="mx-1 text-gray-400 dark:text-gray-500">&middot;</span>
+					<a href={commitUrl} target="_blank" rel="noopener" class="font-mono text-xs text-gray-500 dark:text-gray-400 hover:underline" title={gitCommit}>
+						{shortCommit}
+					</a>
+				{/if}
 			</p>
 			<ol class="mt-2 list-decimal list-inside text-xs text-gray-600 dark:text-gray-300 space-y-0.5">
 				<li>Paste <a href="https://news.ycombinator.com" target="_blank" rel="noopener" class="text-orange-600 dark:text-orange-400 hover:underline">Hacker News</a> URL / post id</li>

@@ -51,6 +51,7 @@ npm run dev
 3. Set build output directory to `build`
 4. Use framework preset `None` (static site)
 5. Optional startup data: commit your exported JSON to `static/examples/startup-analysis.json`
+6. Commit badge: `npm run build` auto-sets `VITE_GIT_COMMIT` from `git rev-parse HEAD` (or you can override by explicitly setting `VITE_GIT_COMMIT`)
 
 ### Commands
 
