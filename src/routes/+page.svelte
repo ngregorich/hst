@@ -694,7 +694,7 @@
 					<button
 						onclick={generateQuestion}
 						disabled={generatingQuestion || !prefs.apiKey}
-						class="w-72 h-12 px-4 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+						class="w-full sm:w-72 h-12 px-4 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
 						title={!prefs.apiKey ? 'Enter API key first' : 'Generate a better question using AI'}
 					>
 						{generatingQuestion ? 'Generating...' : 'Generate Question with AI'}
@@ -707,7 +707,7 @@
 					<button
 						onclick={runAnalysis}
 						disabled={analyzing || !prefs.apiKey}
-						class="w-72 h-12 px-4 text-white rounded disabled:cursor-not-allowed transition-colors {hasAnalysis && !analysisStale ? 'bg-orange-400 hover:bg-orange-500' : 'bg-orange-600 hover:bg-orange-700'} {!prefs.apiKey ? 'opacity-50' : ''}"
+						class="w-full sm:w-72 h-12 px-4 text-white rounded disabled:cursor-not-allowed transition-colors {hasAnalysis && !analysisStale ? 'bg-orange-400 hover:bg-orange-500' : 'bg-orange-600 hover:bg-orange-700'} {!prefs.apiKey ? 'opacity-50' : ''}"
 						title={hasAnalysis && !analysisStale ? 'Analysis up to date (change model or question to re-run)' : ''}
 					>
 						{analyzing ? 'Analyzing...' : hasAnalysis && !analysisStale ? 'Re-run Analysis' : 'Run Analysis'}
@@ -819,20 +819,20 @@
 
 		<!-- Display toggles -->
 		{#if activeTab === 'analysis'}
-			<div class="flex gap-4 text-sm flex-wrap items-center">
+			<div class="grid grid-cols-2 gap-3 text-sm items-center sm:flex sm:flex-wrap sm:gap-4">
 				{#if returnKeyword}
 					<button
-						class="px-2 py-1 border border-orange-300 text-orange-700 dark:text-orange-300 dark:border-orange-700 rounded hover:bg-orange-50 dark:hover:bg-orange-900/20"
+						class="px-2 py-1 border border-orange-300 text-orange-700 dark:text-orange-300 dark:border-orange-700 rounded hover:bg-orange-50 dark:hover:bg-orange-900/20 col-span-2 sm:col-span-1"
 						onclick={jumpBackToKeywordTab}
 					>
 						Back to keyword: {returnKeyword}
 					</button>
 				{/if}
-				<label class="flex items-center gap-2">
+				<label class="flex items-center gap-2 col-span-2 sm:col-span-1">
 					<span>Sort</span>
 					<select
 						bind:value={prefs.sortMode}
-						class="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-sm"
+						class="flex-1 min-w-0 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-sm sm:flex-none"
 					>
 						<option value="default">Default (HN)</option>
 						<option value="time-asc">Time (Oldest first)</option>
@@ -873,7 +873,7 @@
 		{/if}
 
 			{#if activeTab === 'analysis'}
-				<div class="h-[70vh] min-h-[420px] max-h-[900px] overflow-hidden">
+				<div class="h-[70vh] min-h-[420px] max-h-[900px] overflow-hidden hidden md:block">
 					<SplitPane initialWidth={280} minWidth={140} maxWidth={420}>
 						{#snippet left()}
 							<div class="h-full border border-gray-200 dark:border-gray-700 rounded p-3 mr-1 overflow-auto">
@@ -906,6 +906,34 @@
 							</div>
 						{/snippet}
 					</SplitPane>
+				</div>
+				<div class="space-y-3 md:hidden">
+					<div class="border border-gray-200 dark:border-gray-700 rounded p-3 overflow-auto max-h-[48vh]">
+						<h3 class="text-sm font-medium mb-2">Comment Tree</h3>
+						<p class="mb-2 text-xs text-gray-500 dark:text-gray-400">Use arrow keys to navigate</p>
+						<div class="mb-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400">
+							<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block"></span>Promoter</span>
+							<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-slate-500 inline-block"></span>Neutral</span>
+							<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm detractor-legend inline-block"></span>Detractor</span>
+							<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-gray-200 dark:bg-gray-700 border border-gray-400 dark:border-gray-500 inline-block"></span>Empty</span>
+						</div>
+						<TreeView comments={displayedComments} {selectedId} onSelect={selectComment} />
+					</div>
+					<div class="border border-gray-200 dark:border-gray-700 rounded p-2 overflow-auto max-h-[55vh]">
+						<ThreadView
+							comments={displayedComments}
+							{selectedId}
+							{analyzing}
+							showCommentText={prefs.showCommentText}
+							showAuthor={prefs.showAuthor}
+							showTime={prefs.showTime}
+							showSummary={prefs.showSummary}
+							showKeywords={prefs.showKeywords}
+							showSentiment={prefs.showSentiment}
+							onSelect={selectComment}
+							onKeywordClick={jumpToKeyword}
+						/>
+					</div>
 				</div>
 			{:else}
 				<KeywordsTable
