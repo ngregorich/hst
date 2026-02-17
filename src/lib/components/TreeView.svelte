@@ -4,6 +4,7 @@
 interface Props {
 	comments: Comment[];
 	selectedId: number | null;
+	idPrefix?: string;
 	onSelect: (id: number) => void;
 }
 
@@ -25,7 +26,7 @@ interface EdgePosition {
 	endY: number;
 }
 
-let { comments, selectedId, onSelect }: Props = $props();
+let { comments, selectedId, idPrefix = '', onSelect }: Props = $props();
 
 const NODE_SIZE = 12;
 const INDENT = 32;
@@ -35,11 +36,15 @@ const PAD_Y = 10;
 const MIN_WIDTH = 220;
 const MIN_HEIGHT = 120;
 
+function patternId(): string {
+	return `${idPrefix}detractor-hatch`;
+}
+
 function nodeFill(sentiment?: string): string {
 	switch (sentiment) {
 		case 'promoter': return '#22c55e';
 		case 'neutral': return '#64748b';
-		case 'detractor': return 'url(#detractor-hatch)';
+		case 'detractor': return `url(#${patternId()})`;
 		default: return '#e5e7eb';
 	}
 }
@@ -101,7 +106,7 @@ let layout = $derived.by(() => {
 <div class="w-max min-w-full pr-4">
 	<svg width={layout.width} height={layout.height} class="block">
 		<defs>
-			<pattern id="detractor-hatch" patternUnits="userSpaceOnUse" width="4" height="4" patternTransform="rotate(45)">
+			<pattern id={patternId()} patternUnits="userSpaceOnUse" width="4" height="4" patternTransform="rotate(45)">
 				<rect width="4" height="4" fill="#ef4444"></rect>
 				<line x1="0" y1="0" x2="0" y2="4" stroke="rgba(255,255,255,0.72)" stroke-width="1"></line>
 			</pattern>
@@ -121,7 +126,7 @@ let layout = $derived.by(() => {
 
 		{#each layout.nodes as node (node.id)}
 			<g
-				id="tree-node-{node.id}"
+				id={"tree-node-" + idPrefix + node.id}
 				class="cursor-pointer"
 				role="button"
 				tabindex="0"

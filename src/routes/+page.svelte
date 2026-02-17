@@ -28,6 +28,8 @@
 	let highlightedKeyword = $state<string | null>(null);
 	let expandedKeywordRows = $state<string[]>([]);
 	let returnKeyword = $state<string | null>(null);
+	const DESKTOP_ID_PREFIX = 'desktop-';
+	const MOBILE_ID_PREFIX = 'mobile-';
 	let lastSeenModel = $state(prefs.model);
 	let threadSummary = $state('');
 	let generatingThreadSummary = $state(false);
@@ -516,9 +518,11 @@
 	function selectComment(id: number) {
 		selectedId = id;
 		requestAnimationFrame(() => {
-			const threadEl = document.getElementById(`comment-${id}`);
+			const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
+			const prefix = isMobile ? MOBILE_ID_PREFIX : DESKTOP_ID_PREFIX;
+			const threadEl = document.getElementById(`comment-${prefix}${id}`);
 			threadEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-			const treeEl = document.getElementById(`tree-node-${id}`);
+			const treeEl = document.getElementById(`tree-node-${prefix}${id}`);
 			treeEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
 		});
 	}
@@ -885,7 +889,7 @@
 									<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm detractor-legend inline-block"></span>Detractor</span>
 									<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-gray-200 dark:bg-gray-700 border border-gray-400 dark:border-gray-500 inline-block"></span>Empty</span>
 								</div>
-								<TreeView comments={displayedComments} {selectedId} onSelect={selectComment} />
+								<TreeView comments={displayedComments} {selectedId} idPrefix={DESKTOP_ID_PREFIX} onSelect={selectComment} />
 							</div>
 						{/snippet}
 						{#snippet right()}
@@ -893,6 +897,7 @@
 								<ThreadView
 									comments={displayedComments}
 									{selectedId}
+									idPrefix={DESKTOP_ID_PREFIX}
 									{analyzing}
 									showCommentText={prefs.showCommentText}
 									showAuthor={prefs.showAuthor}
@@ -917,12 +922,13 @@
 							<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm detractor-legend inline-block"></span>Detractor</span>
 							<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-gray-200 dark:bg-gray-700 border border-gray-400 dark:border-gray-500 inline-block"></span>Empty</span>
 						</div>
-						<TreeView comments={displayedComments} {selectedId} onSelect={selectComment} />
+						<TreeView comments={displayedComments} {selectedId} idPrefix={MOBILE_ID_PREFIX} onSelect={selectComment} />
 					</div>
 					<div class="border border-gray-200 dark:border-gray-700 rounded p-2 overflow-auto max-h-[55vh]">
 						<ThreadView
 							comments={displayedComments}
 							{selectedId}
+							idPrefix={MOBILE_ID_PREFIX}
 							{analyzing}
 							showCommentText={prefs.showCommentText}
 							showAuthor={prefs.showAuthor}

@@ -4,6 +4,7 @@
 	interface Props {
 		comments: Comment[];
 		selectedId: number | null;
+		idPrefix?: string;
 		showCommentText?: boolean;
 		showSummary?: boolean;
 		showKeywords?: boolean;
@@ -15,7 +16,7 @@
 		onKeywordClick?: (keyword: string) => void;
 	}
 
-	let { comments, selectedId, showCommentText = true, showSummary = true, showKeywords = true, showSentiment = true, showAuthor = true, showTime = true, analyzing = false, onSelect, onKeywordClick }: Props = $props();
+	let { comments, selectedId, idPrefix = '', showCommentText = true, showSummary = true, showKeywords = true, showSentiment = true, showAuthor = true, showTime = true, analyzing = false, onSelect, onKeywordClick }: Props = $props();
 
 	function sentimentBadge(sentiment?: string): { text: string; class: string } {
 		switch (sentiment) {
@@ -46,7 +47,7 @@
 <div class="space-y-4">
 	{#snippet commentNode(comment: Comment, depth: number)}
 		<div
-			id="comment-{comment.id}"
+			id={"comment-" + idPrefix + comment.id}
 			class="border-l-2 pl-3 py-2 {selectedId === comment.id ? 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20' : 'border-gray-200 dark:border-gray-700'}"
 			style="margin-left: {depth * 24}px"
 		>
