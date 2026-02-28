@@ -14,8 +14,9 @@ const OUTPUT_TOKENS_PER_COMMENT = 100;
 // tokenizer differences between models, and other overhead not captured above.
 const ESTIMATE_BUFFER = 1.2;
 
-// Pricing per million tokens (input/output) - updated Feb 2026
-const PRICING: Record<string, { input: number; output: number }> = {
+// Fallback pricing per million tokens (input/output) used when live data is unavailable.
+// These will get stale — prefer the live cache populated by fetchLivePricing().
+const FALLBACK_PRICING: Record<string, { input: number; output: number }> = {
 	'anthropic/claude-haiku-4.5': { input: 1, output: 5 },
 	'anthropic/claude-sonnet-4.5': { input: 3, output: 15 },
 	'deepseek/deepseek-v3.2': { input: 0.5, output: 2 },
@@ -25,6 +26,39 @@ const PRICING: Record<string, { input: number; output: number }> = {
 	'openai/gpt-5.2': { input: 1.75, output: 14 },
 	'x-ai/grok-4.1-fast': { input: 1, output: 4 }
 };
+
+// Live pricing fetched from OpenRouter's /models endpoint (per-million tokens).
+// Null until fetchLivePricing() succeeds.
+let livePricing: Record<string, { input: number; output: number }> | null = null;
+let livePricingFetchedAt = 0;
+const PRICING_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+// Fetches current model pricing from the OpenRouter API and caches it in memory.
+// Safe to call repeatedly — re-fetches at most once per hour.
+// Falls back to FALLBACK_PRICING silently if the request fails.
+export async function fetchLivePricing(apiKey: string): Promise<void> {
+	const now = Date.now();
+	if (livePricing && now - livePricingFetchedAt < PRICING_CACHE_TTL_MS) return;
+
+	try {
+		const res = await fetch('https://openrouter.ai/api/v1/models', {
+			headers: { Authorization: `Bearer ${apiKey}` }
+		});
+		if (!res.ok) return;
+		const data = await res.json();
+		const cache: Record<string, { input: number; output: number }> = {};
+		for (const model of data.data ?? []) {
+			// API returns USD per token; convert to per-million to match our unit
+			const input = parseFloat(model.pricing?.prompt ?? '0') * 1_000_000;
+			const output = parseFloat(model.pricing?.completion ?? '0') * 1_000_000;
+			cache[model.id] = { input, output };
+		}
+		livePricing = cache;
+		livePricingFetchedAt = now;
+	} catch {
+		// Silently ignore — estimateTokens will use FALLBACK_PRICING
+	}
+}
 
 export interface TokenEstimate {
 	inputTokens: number;
@@ -42,7 +76,7 @@ export function estimateTokens(comments: Comment[], model: string): TokenEstimat
 	const inputTokens = Math.ceil((textTokens + commentCount * PROMPT_OVERHEAD_TOKENS) * ESTIMATE_BUFFER);
 	const outputTokens = Math.ceil(commentCount * OUTPUT_TOKENS_PER_COMMENT * ESTIMATE_BUFFER);
 
-	const pricing = PRICING[model] || { input: 1, output: 5 };
+	const pricing = livePricing?.[model] ?? FALLBACK_PRICING[model] ?? { input: 1, output: 5 };
 	const estimatedCost =
 		(inputTokens / 1_000_000) * pricing.input + (outputTokens / 1_000_000) * pricing.output;
 

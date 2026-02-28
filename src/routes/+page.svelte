@@ -12,7 +12,7 @@
 	import { parsePostId, fetchPost, fetchComments, flattenComments, sortCommentsTree, generateSentimentQuestion as generateBasicQuestion } from '$lib/hn';
 	import { analyzeCommentsBatch, generateSentimentQuestion as generateAIQuestion, generateThreadSummary, type ThreadSummaryInput, type OpenRouterDebugEvent } from '$lib/openrouter';
 	import { loadPrefs, savePrefs, saveAnalysis, loadAnalysis, loadAnyAnalysis, listAnalysisModels, loadAllAnalyses, exportToFile, importFromFile, cacheHNData, getCachedHNData, type Preferences } from '$lib/storage';
-	import { estimateTokens, formatCost, formatTokens } from '$lib/tokens';
+	import { estimateTokens, fetchLivePricing, formatCost, formatTokens } from '$lib/tokens';
 	import { DEFAULT_MODEL, SCHEMA_VERSION, type Comment, type HNPost, type AnalysisExport, type MultiModelAnalysisExport } from '$lib/schema';
 
 	const STARTUP_ANALYSIS_PATH = '/examples/startup-analysis.json';
@@ -144,6 +144,11 @@
 	// Save prefs when they change
 	$effect(() => {
 		savePrefs(prefs);
+	});
+
+	// Keep live pricing fresh whenever the API key is set
+	$effect(() => {
+		if (prefs.apiKey) fetchLivePricing(prefs.apiKey);
 	});
 
 	function clearCommentAnalysis(list: Comment[]): Comment[] {
