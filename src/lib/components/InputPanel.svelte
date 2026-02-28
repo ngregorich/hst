@@ -89,7 +89,7 @@
 			</button>
 		</div>
 		{#if loadingProgress}
-			<ProgressBar done={loadingProgress.done} total={loadingProgress.total} label="Discovering comments (estimated)" />
+			<ProgressBar done={loadingProgress.done} total={loadingProgress.total} label="Discovering comments" />
 		{/if}
 	</div>
 
