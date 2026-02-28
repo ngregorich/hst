@@ -91,10 +91,12 @@
 			</button>
 		</div>
 		{#if postTitle}
-			<p class="mt-1.5 text-sm text-gray-600 dark:text-gray-400 italic truncate" title={postTitle}>{postTitle}</p>
+			<p class="mt-1.5 text-sm text-gray-600 dark:text-gray-400 italic">{postTitle}</p>
 		{/if}
 		{#if loadingProgress}
-			<ProgressBar done={loadingProgress.done} total={loadingProgress.total} label="Discovering comments" />
+			<div class="mt-2">
+				<ProgressBar done={loadingProgress.done} total={loadingProgress.total} label="Discovering comments" />
+			</div>
 		{/if}
 	</div>
 
