@@ -10,6 +10,10 @@ const PROMPT_OVERHEAD_TOKENS = 150;
 // Approximate output tokens per response
 const OUTPUT_TOKENS_PER_COMMENT = 100;
 
+// Buffer applied to the final estimate to account for prompt template variability,
+// tokenizer differences between models, and other overhead not captured above.
+const ESTIMATE_BUFFER = 1.2;
+
 // Pricing per million tokens (input/output) - updated Feb 2026
 const PRICING: Record<string, { input: number; output: number }> = {
 	'anthropic/claude-haiku-4.5': { input: 1, output: 5 },
@@ -35,8 +39,8 @@ export function estimateTokens(comments: Comment[], model: string): TokenEstimat
 	const commentCount = flat.length;
 
 	const textTokens = flat.reduce((sum, c) => sum + Math.ceil((c.text?.length || 0) / CHARS_PER_TOKEN), 0);
-	const inputTokens = textTokens + commentCount * PROMPT_OVERHEAD_TOKENS;
-	const outputTokens = commentCount * OUTPUT_TOKENS_PER_COMMENT;
+	const inputTokens = Math.ceil((textTokens + commentCount * PROMPT_OVERHEAD_TOKENS) * ESTIMATE_BUFFER);
+	const outputTokens = Math.ceil(commentCount * OUTPUT_TOKENS_PER_COMMENT * ESTIMATE_BUFFER);
 
 	const pricing = PRICING[model] || { input: 1, output: 5 };
 	const estimatedCost =
