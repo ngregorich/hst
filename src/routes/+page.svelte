@@ -285,6 +285,9 @@
 		const data = await fetchStartupAnalysisData();
 		if (!data) return;
 		await applyImportedAny(data);
+		// Don't expose the demo post ID in the input field or URL
+		postInput = '';
+		goto('/', { replaceState: true });
 	}
 
 	// If model changes while analysis data is shown, clear old results so rerun starts from a clean slate.
@@ -765,20 +768,13 @@
 		bind:threadSummaryPromptTemplate={prefs.threadSummaryPromptTemplate}
 		onLoad={loadPost}
 		loading={loadingPost}
+		loadingProgress={discoveredComments !== null ? { done: discoveredComments, total: commentDiscoveryTotal } : null}
 	/>
 
 	{#if error}
 		<div class="p-3 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded text-red-800 dark:text-red-200">
 			{error}
 		</div>
-	{/if}
-
-	{#if discoveredComments !== null}
-		<ProgressBar
-			done={discoveredComments}
-			total={commentDiscoveryTotal}
-			label="Discovering comments (estimated)"
-		/>
 	{/if}
 
 	{#if !post && !loadingPost}
@@ -820,7 +816,7 @@
 					<button
 						onclick={runAnalysis}
 						disabled={analyzing || !prefs.apiKey}
-						class="w-full sm:w-72 h-12 px-4 text-white rounded disabled:cursor-not-allowed transition-colors {hasAnalysis && !analysisStale ? 'bg-orange-400 hover:bg-orange-500' : 'bg-orange-600 hover:bg-orange-700'} {!prefs.apiKey ? 'opacity-50' : ''}"
+						class="{analyzing ? 'flex-1 sm:flex-none sm:w-72' : 'w-full sm:w-72'} h-12 px-4 text-white rounded disabled:cursor-not-allowed transition-colors {analyzing ? 'bg-gray-400 dark:bg-gray-600' : hasAnalysis && !analysisStale ? 'bg-orange-400 hover:bg-orange-500' : 'bg-orange-600 hover:bg-orange-700'} {!prefs.apiKey ? 'opacity-50' : ''}"
 						title={hasAnalysis && !analysisStale ? 'Analysis up to date (change model or question to re-run)' : ''}
 					>
 						{analyzing ? 'Analyzing...' : hasAnalysis && !analysisStale ? 'Re-run Analysis' : 'Run Analysis'}
@@ -845,6 +841,10 @@
 						</div>
 					{/if}
 			</div>
+
+			{#if analyzeProgress}
+				<ProgressBar done={analyzeProgress.done} total={analyzeProgress.total} label="Analyzing comments" />
+			{/if}
 
 			{#if prefs.showApiDebug}
 				<div class="border border-gray-200 dark:border-gray-700 rounded p-3 text-xs space-y-2 bg-gray-50 dark:bg-gray-900/30">
@@ -907,10 +907,6 @@
 				</div>
 			</div>
 		</div>
-
-		{#if analyzeProgress}
-			<ProgressBar done={analyzeProgress.done} total={analyzeProgress.total} label="Analyzing comments" />
-		{/if}
 
 		<!-- Tabs -->
 		<div class="border-b border-gray-200 dark:border-gray-700">

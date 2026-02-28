@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { MODELS } from '$lib/schema';
-import { DEFAULT_ANALYSIS_PROMPT_TEMPLATE, DEFAULT_QUESTION_PROMPT_TEMPLATE, DEFAULT_THREAD_SUMMARY_PROMPT_TEMPLATE } from '$lib/prompts';
+	import { DEFAULT_ANALYSIS_PROMPT_TEMPLATE, DEFAULT_QUESTION_PROMPT_TEMPLATE, DEFAULT_THREAD_SUMMARY_PROMPT_TEMPLATE } from '$lib/prompts';
+	import ProgressBar from './ProgressBar.svelte';
 
 	interface Props {
 		postInput: string;
@@ -11,6 +12,7 @@ import { DEFAULT_ANALYSIS_PROMPT_TEMPLATE, DEFAULT_QUESTION_PROMPT_TEMPLATE, DEF
 		threadSummaryPromptTemplate: string;
 		onLoad: () => void;
 		loading?: boolean;
+		loadingProgress?: { done: number; total: number } | null;
 	}
 
 	let {
@@ -21,7 +23,8 @@ import { DEFAULT_ANALYSIS_PROMPT_TEMPLATE, DEFAULT_QUESTION_PROMPT_TEMPLATE, DEF
 		analysisPromptTemplate = $bindable(),
 		threadSummaryPromptTemplate = $bindable(),
 		onLoad,
-		loading = false
+		loading = false,
+		loadingProgress = null
 	}: Props = $props();
 
 	let useCustomModel = $state(false);
@@ -85,6 +88,9 @@ import { DEFAULT_ANALYSIS_PROMPT_TEMPLATE, DEFAULT_QUESTION_PROMPT_TEMPLATE, DEF
 				{loading ? 'Loading...' : 'Load'}
 			</button>
 		</div>
+		{#if loadingProgress}
+			<ProgressBar done={loadingProgress.done} total={loadingProgress.total} label="Discovering comments (estimated)" />
+		{/if}
 	</div>
 
 		<div>
