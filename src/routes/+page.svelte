@@ -215,10 +215,10 @@
 		return entries.map(([reason, count]) => `${reason}: ${count}`).join(', ');
 	});
 
-	async function applyImportedAnalysis(data: AnalysisExport): Promise<void> {
+	async function applyImportedAnalysis(data: AnalysisExport, updateNav = true): Promise<void> {
 		post = data.post;
 		comments = data.comments;
-		postInput = String(data.hnPostId);
+		if (updateNav) postInput = String(data.hnPostId);
 		expandedKeywordRows = [];
 		returnKeyword = null;
 		threadSummary = data.threadSummary || '';
@@ -231,10 +231,10 @@
 			prefs.model = data.model;
 		}
 		availableAnalysisModels = await listAnalysisModels(data.hnPostId);
-		goto(`?post=${data.hnPostId}`, { replaceState: true });
+		if (updateNav) goto(`?post=${data.hnPostId}`, { replaceState: true });
 	}
 
-	async function applyImportedBundle(data: MultiModelAnalysisExport): Promise<void> {
+	async function applyImportedBundle(data: MultiModelAnalysisExport, updateNav = true): Promise<void> {
 		if (!data.analyses?.length) return;
 
 		for (const entry of data.analyses) {
@@ -256,17 +256,17 @@
 		const preferredModel = data.analyses.some((a) => a.model === prefs.model) ? prefs.model : data.analyses[0].model;
 		const selected = await loadAnalysis(data.hnPostId, preferredModel);
 		if (selected) {
-			await applyImportedAnalysis(selected);
+			await applyImportedAnalysis(selected, updateNav);
 		}
 	}
 
-	async function applyImportedAny(data: AnalysisExport | MultiModelAnalysisExport): Promise<void> {
+	async function applyImportedAny(data: AnalysisExport | MultiModelAnalysisExport, updateNav = true): Promise<void> {
 		if ('analyses' in data) {
-			await applyImportedBundle(data);
+			await applyImportedBundle(data, updateNav);
 			return;
 		}
 		await saveAnalysis(data);
-		await applyImportedAnalysis(data);
+		await applyImportedAnalysis(data, updateNav);
 	}
 
 	async function fetchStartupAnalysisData(): Promise<AnalysisExport | MultiModelAnalysisExport | null> {
@@ -289,10 +289,8 @@
 	async function loadStartupAnalysis() {
 		const data = await fetchStartupAnalysisData();
 		if (!data) return;
-		await applyImportedAny(data);
-		// Don't expose the demo post ID in the input field or URL
-		postInput = '';
-		goto('/', { replaceState: true });
+		// updateNav=false: don't populate the input field or update the URL with the demo post ID
+		await applyImportedAny(data, false);
 	}
 
 	// If model changes while analysis data is shown, clear old results so rerun starts from a clean slate.
