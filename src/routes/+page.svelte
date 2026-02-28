@@ -772,6 +772,7 @@
 		onLoad={loadPost}
 		loading={loadingPost}
 		loadingProgress={discoveredComments !== null ? { done: discoveredComments, total: commentDiscoveryTotal } : null}
+		postTitle={post?.title ?? null}
 	/>
 
 	{#if error}
@@ -809,7 +810,7 @@
 						class="w-full sm:w-72 h-12 px-4 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
 						title={!prefs.apiKey ? 'Enter API key first' : 'Generate a better question using AI'}
 					>
-						{generatingQuestion ? 'Generating...' : 'Generate Question with AI'}
+						{generatingQuestion ? 'Refining...' : 'Refine Question with AI'}
 					</button>
 				</div>
 			</div>

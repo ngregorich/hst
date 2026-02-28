@@ -13,6 +13,7 @@
 		onLoad: () => void;
 		loading?: boolean;
 		loadingProgress?: { done: number; total: number } | null;
+		postTitle?: string | null;
 	}
 
 	let {
@@ -24,7 +25,8 @@
 		threadSummaryPromptTemplate = $bindable(),
 		onLoad,
 		loading = false,
-		loadingProgress = null
+		loadingProgress = null,
+		postTitle = null
 	}: Props = $props();
 
 	let useCustomModel = $state(false);
@@ -88,6 +90,9 @@
 				{loading ? 'Loading...' : 'Load'}
 			</button>
 		</div>
+		{#if postTitle}
+			<p class="mt-1.5 text-sm text-gray-600 dark:text-gray-400 italic truncate" title={postTitle}>{postTitle}</p>
+		{/if}
 		{#if loadingProgress}
 			<ProgressBar done={loadingProgress.done} total={loadingProgress.total} label="Discovering comments" />
 		{/if}
@@ -106,7 +111,7 @@
 					Get one
 				</a>
 				<span class="mx-1 text-gray-400 dark:text-gray-500">&middot;</span>
-				<span class="text-gray-400 text-xs">(stored locally, no backend)</span>
+				<span class="text-gray-400 text-xs">(stored locally)</span>
 			</label>
 		<input
 			id="api-key"
