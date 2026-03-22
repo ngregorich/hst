@@ -15,7 +15,7 @@
 	import { estimateTokens, fetchLivePricing, formatCost, formatTokens } from '$lib/tokens';
 	import { DEFAULT_MODEL, SCHEMA_VERSION, type Comment, type HNPost, type AnalysisExport, type MultiModelAnalysisExport } from '$lib/schema';
 
-	const STARTUP_ANALYSIS_PATH = '/examples/startup-analysis.json';
+	const STARTUP_ANALYSIS_PATH = '/examples/startup-analysis.json.gz';
 
 	// State
 	let prefs = $state<Preferences>(loadPrefs());
@@ -273,7 +273,10 @@
 		try {
 			const res = await fetch(STARTUP_ANALYSIS_PATH, { cache: 'no-store' });
 			if (!res.ok) return null;
-			const data: AnalysisExport | MultiModelAnalysisExport = await res.json();
+			const ds = new DecompressionStream('gzip');
+			const decompressed = res.body!.pipeThrough(ds);
+			const text = await new Response(decompressed).text();
+			const data: AnalysisExport | MultiModelAnalysisExport = JSON.parse(text);
 			if (!data?.hnPostId || !data?.post) return null;
 			if ('analyses' in data) {
 				if (!Array.isArray(data.analyses) || data.analyses.length === 0) return null;
@@ -445,7 +448,8 @@
 				},
 				abortController.signal,
 				prefs.analysisPromptTemplate,
-				handleApiDebug
+				handleApiDebug,
+				prefs.maxComments
 			);
 
 			// Track what settings were used
@@ -853,6 +857,16 @@
 			{#if prefs.showApiDebug}
 				<div class="border border-gray-200 dark:border-gray-700 rounded p-3 text-xs space-y-2 bg-gray-50 dark:bg-gray-900/30">
 					<div class="font-medium">API Debug</div>
+					<label class="flex items-center gap-2">
+						Max comments (0 = all):
+						<input
+							type="number"
+							bind:value={prefs.maxComments}
+							min="0"
+							step="50"
+							class="w-20 px-1 py-0.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800"
+						/>
+					</label>
 					{#if apiDebug.question}
 						<div>
 							Question: {apiDebug.question.model} | finish: {apiDebug.question.finishReason} | out: {apiDebug.question.outputTokens} | in: {apiDebug.question.inputTokens}

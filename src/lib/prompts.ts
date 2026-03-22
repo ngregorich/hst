@@ -11,8 +11,8 @@ Examples of good statements:
 - "The author's approach to database design is sound"`;
 
 export const DEFAULT_ANALYSIS_PROMPT_TEMPLATE = `Analyze this Hacker News comment for sentiment regarding: "{{sentiment_question}}"
-
-Comment:
+{{thread_context}}
+Comment to analyze:
 """
 {{comment_text}}
 """

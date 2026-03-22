@@ -139,12 +139,31 @@ interface AnalysisResult {
 	keywords: string[];
 }
 
-function buildPrompt(sentimentQuestion: string, commentText: string, analysisPromptTemplate?: string): string {
+function buildAncestorContext(comment: Comment, commentMap: Map<number, Comment>, maxAncestors = 3, maxChars = 200): string {
+	const ancestors: { author: string; text: string }[] = [];
+	let current = comment;
+	while (ancestors.length < maxAncestors && current.parentId !== null) {
+		const parent = commentMap.get(current.parentId);
+		if (!parent || !parent.text) break;
+		ancestors.unshift({ author: parent.author, text: parent.text.slice(0, maxChars) });
+		current = parent;
+	}
+	if (ancestors.length === 0) return '';
+	const lines = ancestors.map((a, i) => {
+		const indent = '>'.repeat(ancestors.length - i) + ' ';
+		const ellipsis = a.text.length >= maxChars ? '...' : '';
+		return `${indent}[${a.author}]: "${a.text}${ellipsis}"`;
+	});
+	return `\nThread context (for understanding only, do NOT analyze these):\n${lines.join('\n')}\n`;
+}
+
+function buildPrompt(sentimentQuestion: string, commentText: string, threadContext: string, analysisPromptTemplate?: string): string {
 	return renderPromptTemplate(
 		analysisPromptTemplate?.trim() || DEFAULT_ANALYSIS_PROMPT_TEMPLATE,
 		{
 			sentiment_question: sentimentQuestion,
-			comment_text: commentText
+			comment_text: commentText,
+			thread_context: threadContext
 		}
 	);
 }
@@ -186,9 +205,12 @@ export async function analyzeComment(
 	comment: Comment,
 	signal?: AbortSignal,
 	analysisPromptTemplate?: string,
-	onDebug?: (event: OpenRouterDebugEvent) => void
+	onDebug?: (event: OpenRouterDebugEvent) => void,
+	commentMap?: Map<number, Comment>
 ): Promise<CommentAnalysis | null> {
 	if (!comment.text || comment.deleted || comment.dead) return null;
+
+	const threadContext = commentMap ? buildAncestorContext(comment, commentMap) : '';
 
 	const res = await fetch(API_URL, {
 		method: 'POST',
@@ -200,7 +222,7 @@ export async function analyzeComment(
 		},
 		body: JSON.stringify({
 			model,
-			messages: [{ role: 'user', content: buildPrompt(sentimentQuestion, comment.text, analysisPromptTemplate) }],
+			messages: [{ role: 'user', content: buildPrompt(sentimentQuestion, comment.text, threadContext, analysisPromptTemplate) }],
 			temperature: 0.3,
 			max_tokens: 320
 		}),
@@ -307,6 +329,18 @@ export async function generateThreadSummary(
 
 const MAX_PARALLEL = 8;
 
+function buildCommentMap(comments: Comment[]): Map<number, Comment> {
+	const map = new Map<number, Comment>();
+	const walk = (list: Comment[]) => {
+		for (const c of list) {
+			map.set(c.id, c);
+			walk(c.children);
+		}
+	};
+	walk(comments);
+	return map;
+}
+
 export async function analyzeCommentsBatch(
 	apiKey: string,
 	model: string,
@@ -316,17 +350,28 @@ export async function analyzeCommentsBatch(
 	onProgress: (done: number, total: number) => void,
 	signal?: AbortSignal,
 	analysisPromptTemplate?: string,
-	onDebug?: (event: OpenRouterDebugEvent) => void
+	onDebug?: (event: OpenRouterDebugEvent) => void,
+	maxComments = 0
 ): Promise<void> {
-	const total = countComments(comments);
-	let done = 0;
+	const commentMap = buildCommentMap(comments);
 
-	// Process a single thread (parent + children sequentially)
-	async function processThread(comment: Comment): Promise<void> {
-		if (signal?.aborted) return;
-		if (comment.text && !comment.deleted && !comment.dead) {
+	// Flatten all analyzable comments into a single queue for even work distribution
+	let allComments = [...commentMap.values()].filter(
+		(c) => c.text && !c.deleted && !c.dead
+	);
+	if (maxComments > 0) allComments = allComments.slice(0, maxComments);
+	const total = allComments.length;
+	let done = 0;
+	let nextIndex = 0;
+
+	async function worker(): Promise<void> {
+		while (true) {
+			if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+			const index = nextIndex++;
+			if (index >= allComments.length) return;
+			const comment = allComments[index];
 			try {
-				const analysis = await analyzeComment(apiKey, model, sentimentQuestion, comment, signal, analysisPromptTemplate, onDebug);
+				const analysis = await analyzeComment(apiKey, model, sentimentQuestion, comment, signal, analysisPromptTemplate, onDebug, commentMap);
 				if (analysis) comment.analysis = analysis;
 			} catch (e) {
 				if (e instanceof Error && e.name === 'AbortError') throw e;
@@ -335,24 +380,9 @@ export async function analyzeCommentsBatch(
 			done++;
 			onProgress(done, total);
 		}
-		// Process children sequentially
-		for (const child of comment.children) {
-			await processThread(child);
-		}
 	}
 
-	// Process top-level comments with a dynamic worker pool so slots stay busy.
-	let nextIndex = 0;
-	async function worker(): Promise<void> {
-		while (true) {
-			if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-			const index = nextIndex++;
-			if (index >= comments.length) return;
-			await processThread(comments[index]);
-		}
-	}
-
-	const workerCount = Math.min(MAX_PARALLEL, comments.length);
+	const workerCount = Math.min(MAX_PARALLEL, allComments.length);
 	await Promise.all(Array.from({ length: workerCount }, () => worker()));
 }
 

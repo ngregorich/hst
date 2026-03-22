@@ -47,6 +47,7 @@ export interface Preferences {
 	showAuthor: boolean;
 	showTime: boolean;
 	showApiDebug: boolean;
+	maxComments: number; // 0 = unlimited
 	questionPromptTemplate: string;
 	analysisPromptTemplate: string;
 	threadSummaryPromptTemplate: string;
@@ -64,6 +65,7 @@ const defaultPrefs: Preferences = {
 	showAuthor: true,
 	showTime: true,
 	showApiDebug: false,
+	maxComments: 0,
 	questionPromptTemplate: DEFAULT_QUESTION_PROMPT_TEMPLATE,
 	analysisPromptTemplate: DEFAULT_ANALYSIS_PROMPT_TEMPLATE,
 	threadSummaryPromptTemplate: DEFAULT_THREAD_SUMMARY_PROMPT_TEMPLATE

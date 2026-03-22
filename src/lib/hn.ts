@@ -63,13 +63,16 @@ export async function fetchComments(
 
 	const allIds: number[] = [];
 	const queue = [...post.kids];
+	const FETCH_BATCH = 10;
 
-	// First pass: collect all comment IDs (total unknown until done)
+	// First pass: collect all comment IDs with batched concurrent fetches
 	while (queue.length > 0) {
-		const id = queue.shift()!;
-		allIds.push(id);
-		const item = await fetchItem(id);
-		if (item?.kids) queue.push(...item.kids);
+		const batch = queue.splice(0, FETCH_BATCH);
+		const items = await Promise.all(batch.map((id) => fetchItem(id)));
+		allIds.push(...batch);
+		for (const item of items) {
+			if (item?.kids) queue.push(...item.kids);
+		}
 		onProgress?.(allIds.length);
 	}
 
