@@ -12,7 +12,7 @@ const OUTPUT_TOKENS_PER_COMMENT = 100;
 
 // Buffer applied to the final estimate to account for prompt template variability,
 // tokenizer differences between models, and other overhead not captured above.
-const ESTIMATE_BUFFER = 1.2;
+const ESTIMATE_BUFFER = 1.4;
 
 // Fallback pricing per million tokens (input/output) used when live data is unavailable.
 // These will get stale — prefer the live cache populated by fetchLivePricing().
